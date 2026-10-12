@@ -41,7 +41,7 @@ Selection for:
 - More, you're free to give more ideas!
 
 Generation for:
--[] WebApps
+-[/] WebApps (backend-only Axum so far)
 -[] CLI
 -[] Gamedev
 -[] Embedded

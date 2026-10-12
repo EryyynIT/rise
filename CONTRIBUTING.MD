@@ -36,7 +36,7 @@ We're building this thing together. Found a panic? Have a killer template idea? 
 
 ```bash
 # Clone the thing
-git clone https://github.com/Dexter2038/rise
+git clone https://github.com/EryyynIT/rise
 cd rise
 
 # Build it (hope it works)
@@ -72,7 +72,7 @@ src/
 
 Want to add support for that obscure Rust use case we haven't thought of? 
 
-1. Add your variant to `ProjectConfig` in `src/config/types.rs`
+1. Add your variant to `ProjectConfig` in `src/config/project.rs`
 2. Implement the template generation in `src/templates/`
 3. Update the CLI prompts in `src/cli/`
 4. Submit a PR and bask in the glory

@@ -19,7 +19,7 @@ This project is still under active development. There's no `cargo install rise` 
 ## Quick Start (for the impatient)
 
 ```bash
-git clone https://github.com/Dexter2038/rise
+git clone https://github.com/EryyynIT/rise
 cd rise
 cargo run
 ```

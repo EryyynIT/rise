@@ -30,10 +30,10 @@ Yes, it's that simple. No, we don't have a fancy installer yet.
 
 -[] `cargo install rise` (when we're fancy)
 
--[] Better error handling with crates like `thiserror`
+-[x] Better error handling with crates like `thiserror`
 
 Selection for:
--[] WebApps
+-[x] WebApps
 -[] CLI
 -[] Gamedev
 -[] Embedded

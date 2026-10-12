@@ -4,7 +4,7 @@ use strum::IntoEnumIterator;
 use crate::cli::render::render_cfg;
 use crate::config::web::*;
 
-pub fn prompt_web_config(config: &mut WebAppConfig) -> Result<(), Box<dyn std::error::Error>> {
+pub fn prompt_web_config(config: &mut WebAppConfig) -> crate::error::Result<()> {
     let kind = Select::new("Select a webapp kind", WebApp::iter().collect())
         .with_render_config(render_cfg())
         .prompt()?;

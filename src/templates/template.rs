@@ -85,15 +85,32 @@ impl Template {
     }
 }
 
+/// Parse the manifests of all embedded templates, sorted by name.
+///
+/// # Errors
+///
+/// [`Error::Manifest`] if an embedded manifest is invalid.
+pub(crate) fn list_embedded() -> Result<Vec<Manifest>> {
+    let mut manifests = Vec::new();
+    for dir in EMBEDDED.dirs() {
+        let name = dir
+            .path()
+            .file_name()
+            .expect("include_dir paths always have a file name")
+            .to_string_lossy();
+        manifests.push(Template::embedded(&name)?.manifest);
+    }
+    manifests.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(manifests)
+}
+
 /// Parsed `template.toml`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Manifest {
     /// Template identifier, matching the directory name.
-    #[allow(dead_code)] // displayed by `rise list` (stage 3)
     pub name: String,
     /// Human-readable summary.
-    #[allow(dead_code)] // displayed by `rise list` (stage 3)
     pub description: String,
     /// File selection rules.
     #[serde(default)]
@@ -229,6 +246,13 @@ Dockerfile = "spec.WebApp.Backend.deployment != 'docker'"
     fn unknown_embedded_template_is_not_found() {
         let err = Template::embedded("nope").expect_err("no such template");
         assert!(matches!(err, Error::TemplateNotFound(_)));
+    }
+
+    #[test]
+    fn lists_embedded_template_manifests() {
+        let manifests = list_embedded().expect("embedded manifests parse");
+        let names: Vec<&str> = manifests.iter().map(|m| m.name.as_str()).collect();
+        assert!(names.contains(&"web-axum"));
     }
 
     #[test]

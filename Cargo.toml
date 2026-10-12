@@ -11,7 +11,7 @@ clap = { version = "4.5.37", features = ["derive"] }
 colored = "3.0.0"
 include_dir = "0.7.4"
 inquire = "0.7.5"
-minijinja = "3.0.0"
+minijinja = { version = "3.0.0", features = ["serde"] }
 serde = { version = "1.0.219", features = ["derive"] }
 strum = { version = "0.27.1", features = ["strum_macros"] }
 strum_macros = "0.27.1"

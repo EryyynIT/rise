@@ -32,6 +32,8 @@ Yes, it's that simple. No, we don't have a fancy installer yet.
 
 -[x] Better error handling with crates like `thiserror`
 
+-[x] Hybrid CLI: `rise new` with stack flags (wizard fills the gaps) + `rise list`
+
 Selection for:
 -[x] WebApps
 -[] CLI

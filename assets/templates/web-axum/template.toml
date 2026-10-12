@@ -1,0 +1,7 @@
+name = "web-axum"
+description = "Backend on Axum + tokio"
+
+# File conditionality lives here, not in Rust code: when the expression
+# (evaluated against the render context) is true, the file is skipped.
+[files.exclude_if]
+Dockerfile = "spec.WebApp.Backend.deployment != 'docker'"

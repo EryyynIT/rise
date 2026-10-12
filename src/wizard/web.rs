@@ -66,10 +66,7 @@ pub(crate) fn complete(flags: WebFlags, mode: Interaction) -> Result<WebAppSpec>
                 None
             } else {
                 Some(fill(deployment, mode, "`--deployment`", || {
-                    select(
-                        "Select a deployment option",
-                        Deployment::iter().collect(),
-                    )
+                    select("Select a deployment option", Deployment::iter().collect())
                 })?)
             };
             Ok(WebAppSpec::Frontend(FrontendSpec {
@@ -144,10 +141,7 @@ fn complete_backend(
         select("Select a database", Database::iter().collect())
     })?;
     let deployment = fill(draft.deployment, mode, "`--deployment`", || {
-        select(
-            "Select a deployment option",
-            Deployment::iter().collect(),
-        )
+        select("Select a deployment option", Deployment::iter().collect())
     })?;
     let testing = fill_multi(draft.testing, mode, || {
         multi_select("Select testing options", Testing::iter().collect())
@@ -226,17 +220,24 @@ mod tests {
 
     #[test]
     fn fill_prefers_the_flag_over_asking() {
-        let value = fill(Some(Database::Diesel), Interaction::Interactive, "`--db`", || {
-            panic!("must not ask when the flag is set")
-        })
+        let value = fill(
+            Some(Database::Diesel),
+            Interaction::Interactive,
+            "`--db`",
+            || panic!("must not ask when the flag is set"),
+        )
         .expect("flag value");
         assert_eq!(value, Database::Diesel);
     }
 
     #[test]
     fn fill_reports_missing_options_when_non_interactive() {
-        let result =
-            fill::<Database>(None, Interaction::NonInteractive, "`--db`", || unreachable!());
+        let result = fill::<Database>(
+            None,
+            Interaction::NonInteractive,
+            "`--db`",
+            || unreachable!(),
+        );
         assert!(matches!(result, Err(Error::MissingOptions(_))));
     }
 

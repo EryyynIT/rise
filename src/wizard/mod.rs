@@ -42,7 +42,9 @@ pub(crate) fn collect(args: NewArgs) -> Result<(ProjectName, ProjectSpec)> {
     } else {
         Interaction::NonInteractive
     };
-    let NewArgs { name, kind, web, .. } = args;
+    let NewArgs {
+        name, kind, web, ..
+    } = args;
 
     let name = match name {
         Some(name) => name,
@@ -105,9 +107,7 @@ fn resolve_kind(
             "What type of project do you want to create?",
             ProjectKind::iter().collect(),
         ),
-        (None, false, Interaction::NonInteractive) => {
-            Err(Error::MissingOptions("`--kind`".into()))
-        }
+        (None, false, Interaction::NonInteractive) => Err(Error::MissingOptions("`--kind`".into())),
     }
 }
 

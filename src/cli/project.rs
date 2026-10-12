@@ -1,22 +1,32 @@
-use inquire::Select;
 use strum::IntoEnumIterator;
+use strum_macros::{Display, EnumIter};
 
-use crate::cli::render::render_cfg;
-use crate::{cli::web::prompt_web_config, config::project::ProjectConfig};
+use crate::cli::{select, web::prompt_web_spec};
+use crate::error::Result;
+use crate::spec::ProjectSpec;
 
-pub fn prompt_project_config() -> crate::error::Result<ProjectConfig> {
-    let kinds = ProjectConfig::iter().collect();
-    let mut project = Select::new("What type of project do you want to create?", kinds)
-        .with_render_config(render_cfg())
-        .prompt()?;
-    match &mut project {
-        ProjectConfig::WebApp(config) => {
-            prompt_web_config(config)?;
-        }
-        ProjectConfig::CliApp => (),
-        ProjectConfig::Library => (),
-        ProjectConfig::Embedded => (),
-        ProjectConfig::Game => (),
+/// Project kinds offered by the wizard's first question.
+#[derive(Debug, Clone, Copy, Display, EnumIter)]
+enum ProjectKind {
+    WebApp,
+    CliApp,
+    Library,
+    Embedded,
+    Game,
+}
+
+/// Ask what to build and collect a complete [`ProjectSpec`].
+pub fn prompt_project_spec() -> Result<ProjectSpec> {
+    let kind = select(
+        "What type of project do you want to create?",
+        ProjectKind::iter().collect(),
+    )?;
+    let spec = match kind {
+        ProjectKind::WebApp => ProjectSpec::WebApp(prompt_web_spec()?),
+        ProjectKind::CliApp => ProjectSpec::CliApp,
+        ProjectKind::Library => ProjectSpec::Library,
+        ProjectKind::Embedded => ProjectSpec::Embedded,
+        ProjectKind::Game => ProjectSpec::Game,
     };
-    Ok(project)
+    Ok(spec)
 }

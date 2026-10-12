@@ -1,0 +1,129 @@
+//! Complete project specification — the single source of truth for scaffolding.
+//!
+//! A [`ProjectSpec`] is *complete*: every option that applies to the chosen
+//! stack is filled in. Options the wizard skips are encoded in the type
+//! (a frontend-only app has no [`BackendSpec`] at all), not as `None`.
+
+use serde::Serialize;
+use strum_macros::{Display, EnumIter};
+
+/// A complete project description, ready for the template engine.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub enum ProjectSpec {
+    WebApp(WebAppSpec),
+    CliApp,
+    Library,
+    Embedded,
+    Game,
+}
+
+/// Spec of a web application. The variant encodes which stacks apply.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub enum WebAppSpec {
+    /// Backend only (API server).
+    Backend(BackendSpec),
+    /// Frontend only (SPA/WASM app or server-side templates).
+    Frontend(FrontendSpec),
+    /// Backend + frontend.
+    Fullstack(FullstackSpec),
+}
+
+/// Backend stack, shared by backend-only and fullstack apps.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct BackendSpec {
+    pub backend: Backend,
+    pub database: Database,
+    pub deployment: Deployment,
+    pub testing: Vec<Testing>,
+    pub features: Vec<Feature>,
+}
+
+/// Frontend-only app.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FrontendSpec {
+    pub frontend: Frontend,
+    /// `None` for server-side template engines: they render inside whatever
+    /// serves them, so there is nothing to deploy separately.
+    pub deployment: Option<Deployment>,
+}
+
+/// Fullstack app: a [`BackendSpec`] plus a frontend.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FullstackSpec {
+    pub frontend: Frontend,
+    pub backend: BackendSpec,
+}
+
+/// Web backend framework.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize)]
+pub enum Backend {
+    Actix,
+    Axum,
+    Rocket,
+    Warp,
+    Tide,
+    Salvo,
+    Gotham,
+}
+
+/// Frontend framework or template engine.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, Serialize)]
+pub enum Frontend {
+    Yew,
+    Leptos,
+    Seed,
+    Svelte,
+    React,
+    Vue,
+    Sauron,
+    Minijinja,
+    Tera,
+    Askama,
+    Handlebars,
+}
+
+impl Frontend {
+    /// Server-side template engines have no separate deployment step.
+    pub fn is_template_engine(self) -> bool {
+        matches!(
+            self,
+            Self::Minijinja | Self::Tera | Self::Askama | Self::Handlebars
+        )
+    }
+}
+
+/// Database / ORM layer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize)]
+pub enum Database {
+    SQLx,
+    Diesel,
+    SeaORM,
+    Sled,
+}
+
+/// Deployment target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize)]
+pub enum Deployment {
+    Docker,
+    Kubernetes,
+    Serverless,
+    SelfHosted,
+}
+
+/// Testing tools.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize)]
+pub enum Testing {
+    Api,
+    SQLx,
+    Mock,
+}
+
+/// Optional backend features.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize)]
+#[allow(non_camel_case_types)] // gRPC keeps its canonical casing
+pub enum Feature {
+    WebSockets,
+    gRPC,
+    GraphQL,
+    RateLimiting,
+}

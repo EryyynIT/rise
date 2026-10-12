@@ -1,141 +1,98 @@
-use inquire::{MultiSelect, Select};
 use strum::IntoEnumIterator;
+use strum_macros::{Display, EnumIter};
 
-use crate::cli::render::render_cfg;
-use crate::config::web::*;
+use crate::cli::{multi_select, select};
+use crate::error::Result;
+use crate::spec::{
+    Backend, BackendSpec, Database, Deployment, Feature, Frontend, FrontendSpec, FullstackSpec,
+    Testing, WebAppSpec,
+};
 
-pub fn prompt_web_config(config: &mut WebAppConfig) -> crate::error::Result<()> {
-    let kind = Select::new("Select a webapp kind", WebApp::iter().collect())
-        .with_render_config(render_cfg())
-        .prompt()?;
-    config.kind = Some(kind);
-
-    if let Some(backends) = get_backends_options(&config) {
-        let backend = Select::new("Select a backend", backends)
-            .with_render_config(render_cfg())
-            .prompt()?;
-
-        config.backend = Some(backend);
-    }
-
-    if let Some(frontends) = get_frontends_options(&config) {
-        let frontend = Select::new("Select a frontend tech", frontends)
-            .with_render_config(render_cfg())
-            .prompt()?;
-
-        config.frontend = Some(frontend);
-    }
-
-    if let Some(databases) = get_databases_options(&config) {
-        let database = Select::new("Select a database", databases)
-            .with_render_config(render_cfg())
-            .prompt()?;
-
-        config.database = Some(database);
-    }
-
-    if let Some(deployments) = get_deployment_options(&config) {
-        let deployment = Select::new("Select a deployment option", deployments)
-            .with_render_config(render_cfg())
-            .prompt()?;
-
-        config.deployment = Some(deployment);
-    }
-
-    if let Some(testings) = get_testing_options(&config) {
-        let testings = MultiSelect::new("Select testing options", testings)
-            .with_render_config(render_cfg())
-            .prompt()?;
-
-        config.testings = testings;
-    }
-
-    if let Some(features) = get_features_options(&config) {
-        let features = MultiSelect::new("Select features", features)
-            .with_render_config(render_cfg())
-            .prompt()?;
-
-        config.features = features;
-    }
-    Ok(())
+/// Shape of a web app — decides which stack questions the wizard asks.
+#[derive(Debug, Clone, Copy, Display, EnumIter)]
+enum WebAppKind {
+    Backend,
+    Frontend,
+    Fullstack,
 }
 
-pub fn get_backends_options(config: &WebAppConfig) -> Option<Vec<Backend>> {
-    if config.kind.clone().unwrap() == WebApp::Frontend {
-        return None;
-    }
-
-    let backends = Backend::iter().collect();
-    Some(backends)
-}
-pub fn get_frontends_options(config: &WebAppConfig) -> Option<Vec<Frontend>> {
-    if config.kind.clone().unwrap() == WebApp::Backend {
-        return None;
-    }
-
-    let common_frontends = vec![
-        Frontend::Svelte,
-        Frontend::React,
-        Frontend::Vue,
-        Frontend::Minijinja,
-        Frontend::Handlebars,
-    ];
-
-    match config.backend {
-        Some(_) => {
-            let backend_specific_frontends = vec![Frontend::Yew, Frontend::Tera, Frontend::Askama];
-            Some([common_frontends, backend_specific_frontends].concat())
+/// Interactively collect a complete [`WebAppSpec`].
+pub fn prompt_web_spec() -> Result<WebAppSpec> {
+    match select("Select a webapp kind", WebAppKind::iter().collect())? {
+        WebAppKind::Backend => {
+            let backend = select("Select a backend", Backend::iter().collect())?;
+            Ok(WebAppSpec::Backend(prompt_backend_spec(backend)?))
         }
-        None => {
-            let no_backend_frontends = vec![Frontend::Leptos, Frontend::Seed, Frontend::Sauron];
-            Some([common_frontends, no_backend_frontends].concat())
+        WebAppKind::Frontend => {
+            let frontend = select("Select a frontend tech", frontend_options(false))?;
+            // Server-side template engines render inside whatever serves them.
+            let deployment = if frontend.is_template_engine() {
+                None
+            } else {
+                Some(select(
+                    "Select a deployment option",
+                    Deployment::iter().collect(),
+                )?)
+            };
+            Ok(WebAppSpec::Frontend(FrontendSpec {
+                frontend,
+                deployment,
+            }))
+        }
+        WebAppKind::Fullstack => {
+            let backend = select("Select a backend", Backend::iter().collect())?;
+            let frontend = select("Select a frontend tech", frontend_options(true))?;
+            let backend = prompt_backend_spec(backend)?;
+            Ok(WebAppSpec::Fullstack(FullstackSpec { frontend, backend }))
         }
     }
 }
 
-#[allow(clippy::all)]
-pub fn get_databases_options(config: &WebAppConfig) -> Option<Vec<Database>> {
-    if config.backend.is_none() {
-        return None;
-    }
-
-    let databases = Database::iter().collect();
-    Some(databases)
+/// Ask the questions shared by backend-only and fullstack apps.
+fn prompt_backend_spec(backend: Backend) -> Result<BackendSpec> {
+    let database = select("Select a database", Database::iter().collect())?;
+    let deployment = select("Select a deployment option", Deployment::iter().collect())?;
+    let testing = multi_select("Select testing options", Testing::iter().collect())?;
+    let features = multi_select("Select features", Feature::iter().collect())?;
+    Ok(BackendSpec {
+        backend,
+        database,
+        deployment,
+        testing,
+        features,
+    })
 }
 
-pub fn get_deployment_options(config: &WebAppConfig) -> Option<Vec<Deployment>> {
-    let frontends_without_deployment = vec![
-        Frontend::Tera,
-        Frontend::Askama,
-        Frontend::Minijinja,
-        Frontend::Handlebars,
-    ];
-    if config.backend.is_none()
-        && frontends_without_deployment.contains(&config.frontend.clone().unwrap())
-    {
-        return None;
-    }
-
-    let deployments = Deployment::iter().collect();
-    Some(deployments)
+/// Frontend choices depend on whether a Rust backend is present.
+fn frontend_options(has_backend: bool) -> Vec<Frontend> {
+    use Frontend::*;
+    let mut options = vec![Svelte, React, Vue, Minijinja, Handlebars];
+    let specific = if has_backend {
+        [Yew, Tera, Askama]
+    } else {
+        [Leptos, Seed, Sauron]
+    };
+    options.extend(specific);
+    options
 }
 
-#[allow(clippy::all)]
-pub fn get_testing_options(config: &WebAppConfig) -> Option<Vec<Testing>> {
-    if config.backend.is_none() {
-        return None;
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn frontend_options_with_backend() {
+        let options = frontend_options(true);
+        assert!(options.contains(&Frontend::Yew));
+        assert!(options.contains(&Frontend::Minijinja));
+        assert!(!options.contains(&Frontend::Leptos));
     }
 
-    let testings = Testing::iter().collect();
-    Some(testings)
-}
-
-#[allow(clippy::all)]
-pub fn get_features_options(config: &WebAppConfig) -> Option<Vec<Features>> {
-    if config.backend.is_none() {
-        return None;
+    #[test]
+    fn frontend_options_without_backend() {
+        let options = frontend_options(false);
+        assert!(options.contains(&Frontend::Leptos));
+        assert!(options.contains(&Frontend::Handlebars));
+        assert!(!options.contains(&Frontend::Yew));
     }
-
-    let features = Features::iter().collect();
-    Some(features)
 }

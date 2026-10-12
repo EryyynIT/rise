@@ -2,10 +2,8 @@
 
 use colored::Colorize;
 
-use crate::cli::Command;
+use crate::cli::{Command, NewArgs};
 use crate::color::{FERRIS_TEAL, RUST_ORANGE, STEEL_GRAY};
-use crate::name::ProjectName;
-use crate::wizard::project::prompt_project_spec;
 
 mod cli;
 mod color;
@@ -18,30 +16,28 @@ mod wizard;
 pub use cli::Cli;
 pub use error::Error;
 
-/// Placeholder project name until the wizard asks for one.
-const PLACEHOLDER_NAME: &str = "my-app";
-
 /// Dispatch on the parsed command line.
 ///
 /// # Errors
 ///
-/// Returns [`Error::Aborted`] when the user cancels a prompt, or
-/// [`Error::Prompt`] when a prompt fails (e.g. stdin is not a TTY).
-/// Generation can additionally fail with template or filesystem errors.
+/// Returns [`Error::Aborted`] when the user cancels a prompt,
+/// [`Error::ConflictingOptions`] on contradictory flags and
+/// [`Error::MissingOptions`] when a non-interactive run lacks required
+/// options. Generation can additionally fail with template or filesystem
+/// errors.
 pub fn run(cli: Cli) -> Result<(), Error> {
     match cli.command {
         Some(Command::List) => list_templates(),
-        None => run_wizard(),
+        Some(Command::New(args)) => run_new(args),
+        None => run_new(NewArgs::default()),
     }
 }
 
-/// The default mode: banner, interactive wizard, generation.
-fn run_wizard() -> Result<(), Error> {
+/// The main mode: banner, wizard over the flag gaps, generation.
+fn run_new(args: NewArgs) -> Result<(), Error> {
     print_banner();
 
-    let spec = prompt_project_spec()?;
-    let name = ProjectName::new(PLACEHOLDER_NAME.to_owned())
-        .expect("the placeholder name is a valid crate name");
+    let (name, spec) = wizard::collect(args)?;
     let path = templates::generate(&spec, &name)?;
 
     println!("created ./{}", path.display());

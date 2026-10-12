@@ -4,8 +4,27 @@
 //! stack is filled in. Options the wizard skips are encoded in the type
 //! (a frontend-only app has no [`BackendSpec`] at all), not as `None`.
 
+use clap::ValueEnum;
 use serde::Serialize;
 use strum_macros::{Display, EnumIter};
+
+/// What kind of project to create: the `--kind` values and the wizard's
+/// first question.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, EnumIter, ValueEnum)]
+pub enum ProjectKind {
+    /// Web application (backend, frontend or both).
+    #[value(name = "web")]
+    WebApp,
+    /// Command-line application.
+    #[value(name = "cli")]
+    CliApp,
+    /// Library crate.
+    Library,
+    /// Embedded firmware.
+    Embedded,
+    /// Game.
+    Game,
+}
 
 /// A complete project description, ready for the template engine.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -55,7 +74,7 @@ pub struct FullstackSpec {
 }
 
 /// Web backend framework.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum Backend {
     Actix,
@@ -68,7 +87,7 @@ pub enum Backend {
 }
 
 /// Frontend framework or template engine.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, Serialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum Frontend {
     Yew,
@@ -95,19 +114,21 @@ impl Frontend {
 }
 
 /// Database / ORM layer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum Database {
     #[serde(rename = "sqlx")]
+    #[value(name = "sqlx")]
     SQLx,
     Diesel,
     #[serde(rename = "sea-orm")]
+    #[value(name = "sea-orm")]
     SeaORM,
     Sled,
 }
 
 /// Deployment target.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum Deployment {
     Docker,
@@ -117,22 +138,24 @@ pub enum Deployment {
 }
 
 /// Testing tools.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum Testing {
     Api,
     #[serde(rename = "sqlx")]
+    #[value(name = "sqlx")]
     SQLx,
     Mock,
 }
 
 /// Optional backend features.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 #[allow(non_camel_case_types)] // gRPC keeps its canonical casing
 pub enum Feature {
     WebSockets,
     #[serde(rename = "grpc")]
+    #[value(name = "grpc")]
     gRPC,
     GraphQL,
     RateLimiting,

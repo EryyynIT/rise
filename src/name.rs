@@ -26,6 +26,13 @@ impl ProjectName {
         Ok(Self(name))
     }
 
+    /// Check that `name` is a valid crate name, with a static reason on
+    /// failure. Shared by the flag parser ([`FromStr`]) and the wizard's
+    /// prompt validator.
+    pub(crate) fn validate(name: &str) -> std::result::Result<(), &'static str> {
+        validate(name)
+    }
+
     /// The name as a string slice.
     pub(crate) fn as_str(&self) -> &str {
         &self.0

@@ -25,6 +25,16 @@ pub enum Error {
     #[error("invalid project name `{name}`: {reason}")]
     InvalidProjectName { name: String, reason: &'static str },
 
+    /// A non-interactive run is missing a required option.
+    #[error(
+        "missing required option {0} in a non-interactive run; pass the flag or run interactively"
+    )]
+    MissingOptions(String),
+
+    /// CLI flags contradict each other.
+    #[error("conflicting options: {0}")]
+    ConflictingOptions(String),
+
     /// The stack described by the spec has no template yet.
     #[error("template `{0}` is not available yet")]
     TemplateNotFound(String),

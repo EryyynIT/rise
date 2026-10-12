@@ -52,6 +52,7 @@ fn new_generates_backend_project_without_prompts() {
     assert!(cargo_toml.contains("name = \"sample-app\""));
     assert!(project.join("src/main.rs").exists());
     assert!(project.join("Dockerfile").exists());
+    assert!(project.join(".git").exists(), "git init ran");
 }
 
 #[test]

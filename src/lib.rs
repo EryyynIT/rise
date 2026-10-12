@@ -39,9 +39,26 @@ fn run_new(args: NewArgs) -> Result<(), Error> {
 
     let (name, spec) = wizard::collect(args)?;
     let path = templates::generate(&spec, &name)?;
+    init_git(&path);
 
     println!("created ./{}", path.display());
+    println!("\nnext steps:\n  cd {name}\n  cargo run");
     Ok(())
+}
+
+/// Initialize a git repository in the new project. Purely best-effort: a
+/// missing or failing `git` only costs the user a manual `git init`.
+fn init_git(dir: &std::path::Path) {
+    let ok = std::process::Command::new("git")
+        .arg("init")
+        .current_dir(dir)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success());
+    if !ok {
+        eprintln!("note: `git init` did not run; initialize git in the project manually");
+    }
 }
 
 /// `rise list`: print the embedded templates.

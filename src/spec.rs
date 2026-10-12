@@ -56,6 +56,7 @@ pub struct FullstackSpec {
 
 /// Web backend framework.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Backend {
     Actix,
     Axum,
@@ -68,6 +69,7 @@ pub enum Backend {
 
 /// Frontend framework or template engine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Frontend {
     Yew,
     Leptos,
@@ -94,15 +96,19 @@ impl Frontend {
 
 /// Database / ORM layer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Database {
+    #[serde(rename = "sqlx")]
     SQLx,
     Diesel,
+    #[serde(rename = "sea-orm")]
     SeaORM,
     Sled,
 }
 
 /// Deployment target.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Deployment {
     Docker,
     Kubernetes,
@@ -112,17 +118,21 @@ pub enum Deployment {
 
 /// Testing tools.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Testing {
     Api,
+    #[serde(rename = "sqlx")]
     SQLx,
     Mock,
 }
 
 /// Optional backend features.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize)]
+#[serde(rename_all = "kebab-case")]
 #[allow(non_camel_case_types)] // gRPC keeps its canonical casing
 pub enum Feature {
     WebSockets,
+    #[serde(rename = "grpc")]
     gRPC,
     GraphQL,
     RateLimiting,

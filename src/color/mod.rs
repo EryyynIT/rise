@@ -1,3 +1,5 @@
+// Brand palette: the full color set is kept even where not all colors are used yet.
+#[allow(dead_code)]
 mod palette;
 pub use palette::*;
 

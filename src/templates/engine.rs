@@ -10,6 +10,7 @@ use minijinja::{Environment, ErrorKind as JinjaErrorKind, Value};
 use serde::Serialize;
 
 use crate::error::{Error, Result};
+use crate::name::ProjectName;
 use crate::spec::{Backend, ProjectSpec, WebAppSpec};
 use crate::templates::template::{RENDER_SUFFIX, Template, TemplateFile};
 
@@ -25,12 +26,12 @@ use crate::templates::template::{RENDER_SUFFIX, Template, TemplateFile};
 /// [`Error::TargetNotEmpty`] if `./<name>/` exists and is not empty, and
 /// [`Error::Manifest`]/[`Error::Render`]/[`Error::Io`] for template and
 /// filesystem failures.
-pub(crate) fn generate(spec: &ProjectSpec, name: &str) -> Result<PathBuf> {
+pub(crate) fn generate(spec: &ProjectSpec, name: &ProjectName) -> Result<PathBuf> {
     let template = Template::embedded(template_id(spec)?)?;
-    let target = PathBuf::from(name);
+    let target = PathBuf::from(name.as_str());
     let target_existed = prepare_target(&target)?;
 
-    let result = render_into(&template, spec, name, &target);
+    let result = render_into(&template, spec, name.as_str(), &target);
     if result.is_err() && !target_existed {
         // Never leave a half-written project behind.
         let _ = fs::remove_dir_all(&target);

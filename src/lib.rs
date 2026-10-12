@@ -3,10 +3,12 @@
 use colored::Colorize;
 
 use crate::color::{FERRIS_TEAL, RUST_ORANGE, STEEL_GRAY};
+use crate::name::ProjectName;
 use crate::wizard::project::prompt_project_spec;
 
 mod color;
 mod error;
+mod name;
 mod spec;
 mod templates;
 mod wizard;
@@ -32,7 +34,9 @@ pub fn run() -> Result<(), Error> {
     );
 
     let spec = prompt_project_spec()?;
-    let path = templates::generate(&spec, PLACEHOLDER_NAME)?;
+    let name = ProjectName::new(PLACEHOLDER_NAME.to_owned())
+        .expect("the placeholder name is a valid crate name");
+    let path = templates::generate(&spec, &name)?;
 
     println!("created ./{}", path.display());
     Ok(())

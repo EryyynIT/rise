@@ -21,6 +21,10 @@ pub enum Error {
     #[error("prompt failed: {0}")]
     Prompt(#[source] InquireError),
 
+    /// A project name failed crate-name validation.
+    #[error("invalid project name `{name}`: {reason}")]
+    InvalidProjectName { name: String, reason: &'static str },
+
     /// The stack described by the spec has no template yet.
     #[error("template `{0}` is not available yet")]
     TemplateNotFound(String),

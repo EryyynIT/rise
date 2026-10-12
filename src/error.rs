@@ -20,6 +20,26 @@ pub enum Error {
     /// An interactive prompt failed (terminal I/O, stdin not a TTY, ...).
     #[error("prompt failed: {0}")]
     Prompt(#[source] InquireError),
+
+    /// The stack described by the spec has no template yet.
+    #[error("template `{0}` is not available yet")]
+    TemplateNotFound(String),
+
+    /// A template manifest (`template.toml`) failed to parse.
+    #[error("invalid template manifest: {0}")]
+    Manifest(#[from] toml::de::Error),
+
+    /// Template rendering failed.
+    #[error("render failed: {0}")]
+    Render(#[from] minijinja::Error),
+
+    /// The target directory already exists and is not empty.
+    #[error("target directory `{0}` already exists and is not empty")]
+    TargetNotEmpty(String),
+
+    /// A filesystem operation failed.
+    #[error("filesystem error: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 impl From<InquireError> for Error {

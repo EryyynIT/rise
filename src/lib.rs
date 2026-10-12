@@ -13,12 +13,16 @@ mod templates;
 
 pub use error::Error;
 
-/// Run the interactive wizard.
+/// Placeholder project name until stage 3 adds the name prompt and `--name`.
+const PLACEHOLDER_NAME: &str = "my-app";
+
+/// Run the interactive wizard, then generate the project on disk.
 ///
 /// # Errors
 ///
 /// Returns [`Error::Aborted`] when the user cancels a prompt, or
 /// [`Error::Prompt`] when a prompt fails (e.g. stdin is not a TTY).
+/// Generation can additionally fail with template or filesystem errors.
 pub fn run() -> Result<(), Error> {
     println!(
         "{}  {}\n    {}",
@@ -27,7 +31,9 @@ pub fn run() -> Result<(), Error> {
         "fast, idiomatic, async Rust scaffolding".custom_color(STEEL_GRAY)
     );
 
-    let _spec = prompt_project_spec()?;
+    let spec = prompt_project_spec()?;
+    let path = templates::generate(&spec, PLACEHOLDER_NAME)?;
 
+    println!("created ./{}", path.display());
     Ok(())
 }

@@ -1,7 +1,7 @@
 use strum::IntoEnumIterator;
 use strum_macros::{Display, EnumIter};
 
-use crate::cli::{select, web::prompt_web_spec};
+use crate::wizard::{select, web::prompt_web_spec};
 use crate::error::Result;
 use crate::spec::ProjectSpec;
 

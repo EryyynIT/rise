@@ -2,14 +2,14 @@
 
 use colored::Colorize;
 
-use crate::cli::project::prompt_project_spec;
 use crate::color::{FERRIS_TEAL, RUST_ORANGE, STEEL_GRAY};
+use crate::wizard::project::prompt_project_spec;
 
-mod cli;
 mod color;
 mod error;
 mod spec;
 mod templates;
+mod wizard;
 
 pub use error::Error;
 

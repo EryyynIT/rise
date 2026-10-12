@@ -1,7 +1,7 @@
 use strum::IntoEnumIterator;
 use strum_macros::{Display, EnumIter};
 
-use crate::cli::{multi_select, select};
+use crate::wizard::{multi_select, select};
 use crate::error::Result;
 use crate::spec::{
     Backend, BackendSpec, Database, Deployment, Feature, Frontend, FrontendSpec, FullstackSpec,

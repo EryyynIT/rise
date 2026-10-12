@@ -8,7 +8,7 @@ use std::fmt::Display;
 
 use inquire::{MultiSelect, Select};
 
-use crate::cli::render::render_cfg;
+use crate::wizard::render::render_cfg;
 use crate::error::Result;
 
 /// Single-choice prompt with the rise theme.

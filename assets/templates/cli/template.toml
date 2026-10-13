@@ -1,0 +1,2 @@
+name = "cli"
+description = "Command-line app on clap (derive)"

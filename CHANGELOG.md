@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `cli` template: `--kind cli` generates a command-line scaffold on clap
+  (derive).
+- `library` template: `--kind library` generates a library crate with a test
+  stub.
+- The next-steps hint after generation matches the project kind: `cargo run`,
+  or `cargo test` for libraries.
+
 ## [0.1.0] - 2026-10-13
 
 First published release. The package is `rise-cli`; the binary is `rise`.

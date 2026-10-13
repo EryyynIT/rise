@@ -45,18 +45,18 @@ Yes, it's that simple. Prebuilt binaries and shell installers are on the way.
 
 Selection for:
 -[x] WebApps
--[] CLI
+-[x] CLI
 -[] Gamedev
 -[] Embedded
--[] Libraries
+-[x] Libraries
 - More, you're free to give more ideas!
 
 Generation for:
 -[/] WebApps (backend-only: Axum and Actix Web so far)
--[] CLI
+-[x] CLI
 -[] Gamedev
 -[] Embedded
--[] Libraries
+-[x] Libraries
 - More (if you wish to add something)
 
 ## The vision

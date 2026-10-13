@@ -2,6 +2,13 @@
 name = "rise-cli"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
+description = "Interactive scaffolder for new Rust projects: pick a stack, get a working project on disk"
+license = "Apache-2.0"
+repository = "https://github.com/EryyynIT/rise"
+readme = "README.MD"
+keywords = ["cli", "scaffolding", "template", "project-generator", "boilerplate"]
+categories = ["command-line-utilities", "development-tools"]
 
 # The package is `rise-cli` (the name `rise` was taken on crates.io), but both
 # the library and the binary keep the short name `rise`.

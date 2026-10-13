@@ -23,3 +23,41 @@ async fn main() {
 async fn root() -> &'static str {
     "Hello from {{ name }}!"
 }
+{%- if 'api' in spec.WebApp.Backend.testing %}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn root_says_hello() {
+        let app = Router::new().route("/", get(root));
+        let response = app
+            .oneshot(Request::get("/").body(Body::empty()).expect("request"))
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+}
+{%- endif %}
+{%- if 'sqlx' in spec.WebApp.Backend.testing and spec.WebApp.Backend.database == 'sqlx' %}
+
+#[cfg(test)]
+mod db_tests {
+    #[tokio::test]
+    #[ignore = "needs a running Postgres (set DATABASE_URL)"]
+    async fn pool_connects() {
+        let pool = crate::db::create_pool().await.expect("connect");
+        let row: (i64,) = sqlx::query_as("SELECT 1")
+            .fetch_one(&pool)
+            .await
+            .expect("query");
+        assert_eq!(row.0, 1);
+    }
+}
+{%- endif %}

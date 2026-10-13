@@ -15,3 +15,13 @@ sea-orm = { version = "1", features = ["sqlx-postgres", "runtime-tokio-rustls"] 
 {%- elif spec.WebApp.Backend.database == 'sled' %}
 sled = "0.34"
 {%- endif %}
+{%- if 'api' in spec.WebApp.Backend.testing or 'mock' in spec.WebApp.Backend.testing %}
+
+[dev-dependencies]
+{%- if 'api' in spec.WebApp.Backend.testing %}
+tower = "0.5"
+{%- endif %}
+{%- if 'mock' in spec.WebApp.Backend.testing %}
+mockall = "0.13"
+{%- endif %}
+{%- endif %}

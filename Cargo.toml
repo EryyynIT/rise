@@ -1,7 +1,16 @@
 [package]
-name = "rise"
+name = "rise-cli"
 version = "0.1.0"
 edition = "2024"
+
+# The package is `rise-cli` (the name `rise` was taken on crates.io), but both
+# the library and the binary keep the short name `rise`.
+[lib]
+name = "rise"
+
+[[bin]]
+name = "rise"
+path = "src/main.rs"
 
 [lints.rust]
 unsafe_code = "forbid"

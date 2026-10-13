@@ -89,6 +89,47 @@ fn new_generates_actix_project_without_prompts() {
 }
 
 #[test]
+fn new_generates_cli_project_without_prompts() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args(["new", "greeter", "--kind", "cli", "--no-input"])
+        .current_dir(tmp.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("created ./greeter"))
+        .stdout(predicate::str::contains("cargo run"));
+
+    let project = tmp.path().join("greeter");
+    let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read Cargo.toml");
+    assert!(cargo_toml.contains("name = \"greeter\""));
+    assert!(cargo_toml.contains("clap"));
+    assert!(project.join("src/main.rs").exists());
+    assert!(project.join(".git").exists(), "git init ran");
+}
+
+#[test]
+fn new_generates_library_project_without_prompts() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args(["new", "mathlib", "--kind", "library", "--no-input"])
+        .current_dir(tmp.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("created ./mathlib"))
+        .stdout(predicate::str::contains("cargo test"));
+
+    let project = tmp.path().join("mathlib");
+    let lib_rs = std::fs::read_to_string(project.join("src/lib.rs")).expect("read lib.rs");
+    assert!(lib_rs.contains("mathlib"));
+    assert!(lib_rs.contains("#[cfg(test)]"));
+    assert!(!project.join("src/main.rs").exists());
+}
+
+#[test]
 fn new_reports_the_missing_flag_when_non_interactive() {
     Command::cargo_bin("rise")
         .expect("binary")

@@ -345,4 +345,86 @@ mod tests {
         let err = prepare_target(&target).expect_err("must reject non-empty dir");
         assert!(matches!(err, Error::TargetNotEmpty(_)));
     }
+
+    // --- Output snapshots ---
+    //
+    // The whole generated tree as one deterministic string, snapshotted with
+    // insta. Baseline for template content changes: any diff in generated
+    // output shows up here. Update with `INSTA_UPDATE=always cargo test`
+    // (or `cargo insta accept`) after a deliberate template change.
+
+    #[test]
+    fn snapshot_web_axum_docker() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec(
+            Backend::Axum,
+            Deployment::Docker
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_axum_kubernetes() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec(
+            Backend::Axum,
+            Deployment::Kubernetes
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_docker() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec(
+            Backend::Actix,
+            Deployment::Docker
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_kubernetes() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec(
+            Backend::Actix,
+            Deployment::Kubernetes
+        )));
+    }
+
+    #[test]
+    fn snapshot_cli() {
+        insta::assert_snapshot!(snapshot_output(&ProjectSpec::CliApp));
+    }
+
+    #[test]
+    fn snapshot_library() {
+        insta::assert_snapshot!(snapshot_output(&ProjectSpec::Library));
+    }
+
+    /// Render `spec` into a tempdir and return every generated file as one
+    /// sorted `=== path ===` listing. Path separators are normalized so
+    /// snapshots match across platforms.
+    fn snapshot_output(spec: &ProjectSpec) -> String {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template =
+            Template::embedded(template_id(spec).expect("template id")).expect("embedded template");
+        render_into(&template, spec, "sample-app", tmp.path()).expect("render");
+
+        let mut files = Vec::new();
+        collect_files(tmp.path(), tmp.path(), &mut files);
+        files.sort();
+
+        let mut out = String::new();
+        for rel in files {
+            let contents = fs::read_to_string(tmp.path().join(&rel)).expect("utf8 file");
+            out.push_str(&format!("=== {rel} ===\n{contents}\n"));
+        }
+        out
+    }
+
+    fn collect_files(root: &Path, dir: &Path, out: &mut Vec<String>) {
+        for entry in fs::read_dir(dir).expect("read dir") {
+            let path = entry.expect("entry").path();
+            if path.is_dir() {
+                collect_files(root, &path, out);
+            } else {
+                let rel = path.strip_prefix(root).expect("under root");
+                out.push(rel.to_string_lossy().replace('\\', "/"));
+            }
+        }
+    }
 }

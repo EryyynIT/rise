@@ -1,0 +1,31 @@
+---
+source: src/templates/engine.rs
+expression: "snapshot_output(&ProjectSpec::CliApp)"
+---
+=== .gitignore ===
+/target
+
+=== Cargo.toml ===
+[package]
+name = "sample-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+=== src/main.rs ===
+use clap::Parser;
+
+/// sample-app — command-line application.
+#[derive(Parser)]
+#[command(version, about)]
+struct Cli {
+    /// Who to greet.
+    #[arg(default_value = "world")]
+    name: String,
+}
+
+fn main() {
+    let cli = Cli::parse();
+    println!("Hello, {}!", cli.name);
+}

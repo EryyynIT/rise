@@ -1,0 +1,31 @@
+---
+source: src/templates/engine.rs
+expression: "snapshot_output(&ProjectSpec::Library)"
+---
+=== .gitignore ===
+/target
+
+=== Cargo.toml ===
+[package]
+name = "sample-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+=== src/lib.rs ===
+//! sample-app library.
+
+/// Add two numbers.
+pub fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_adds() {
+        assert_eq!(add(2, 2), 4);
+    }
+}

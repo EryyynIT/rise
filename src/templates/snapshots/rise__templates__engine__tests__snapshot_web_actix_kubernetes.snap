@@ -1,0 +1,31 @@
+---
+source: src/templates/engine.rs
+expression: "snapshot_output(&backend_spec(Backend::Actix, Deployment::Kubernetes))"
+---
+=== .gitignore ===
+/target
+
+=== Cargo.toml ===
+[package]
+name = "sample-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+actix-web = "4"
+=== src/main.rs ===
+use actix_web::{App, HttpServer, Responder, get};
+
+#[get("/")]
+async fn root() -> impl Responder {
+    "Hello from sample-app!"
+}
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    println!("listening on http://localhost:3000");
+    HttpServer::new(|| App::new().service(root))
+        .bind(("0.0.0.0", 3000))?
+        .run()
+        .await
+}

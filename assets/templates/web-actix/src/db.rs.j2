@@ -1,0 +1,16 @@
+//! Database connection pool (sqlx + Postgres).
+
+use sqlx::{PgPool, postgres::PgPoolOptions};
+
+/// Build a connection pool from the `DATABASE_URL` environment variable.
+///
+/// Copy `.env.example` to `.env` and adjust the URL for your database.
+/// Queries use sqlx's runtime-checked API, so the project compiles without
+/// a live database; `DATABASE_URL` is only needed at run time.
+pub async fn create_pool() -> Result<PgPool, sqlx::Error> {
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&database_url)
+        .await
+}

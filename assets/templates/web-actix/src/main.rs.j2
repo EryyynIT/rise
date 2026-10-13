@@ -1,4 +1,8 @@
 use actix_web::{App, HttpServer, Responder, get};
+{%- if spec.WebApp.Backend.database == 'sqlx' %}
+
+mod db;
+{%- endif %}
 
 #[get("/")]
 async fn root() -> impl Responder {
@@ -7,9 +11,19 @@ async fn root() -> impl Responder {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+{%- if spec.WebApp.Backend.database == 'sqlx' %}
+    let pool = db::create_pool().await.expect("failed to connect to database");
+{%- endif %}
     println!("listening on http://localhost:3000");
-    HttpServer::new(|| App::new().service(root))
-        .bind(("0.0.0.0", 3000))?
-        .run()
-        .await
+    HttpServer::new(move || {
+        let app = App::new().service(root);
+{%- if spec.WebApp.Backend.database == 'sqlx' %}
+        app.app_data(actix_web::web::Data::new(pool.clone()))
+{%- else %}
+        app
+{%- endif %}
+    })
+    .bind(("0.0.0.0", 3000))?
+    .run()
+    .await
 }

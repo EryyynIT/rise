@@ -2,9 +2,11 @@
 source: src/templates/engine.rs
 expression: "snapshot_output(&backend_spec(Backend::Actix, Deployment::Docker))"
 ---
+=== .env.example ===
+DATABASE_URL=postgres://postgres:postgres@localhost/sample_app
 === .gitignore ===
 /target
-
+.env
 === Cargo.toml ===
 [package]
 name = "sample-app"
@@ -13,6 +15,7 @@ edition = "2024"
 
 [dependencies]
 actix-web = "4"
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }
 === Dockerfile ===
 FROM rust:1-slim AS builder
 WORKDIR /app
@@ -23,8 +26,27 @@ FROM debian:bookworm-slim
 COPY --from=builder /app/target/release/sample-app /usr/local/bin/app
 EXPOSE 3000
 CMD ["app"]
+=== src/db.rs ===
+//! Database connection pool (sqlx + Postgres).
+
+use sqlx::{PgPool, postgres::PgPoolOptions};
+
+/// Build a connection pool from the `DATABASE_URL` environment variable.
+///
+/// Copy `.env.example` to `.env` and adjust the URL for your database.
+/// Queries use sqlx's runtime-checked API, so the project compiles without
+/// a live database; `DATABASE_URL` is only needed at run time.
+pub async fn create_pool() -> Result<PgPool, sqlx::Error> {
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&database_url)
+        .await
+}
 === src/main.rs ===
 use actix_web::{App, HttpServer, Responder, get};
+
+mod db;
 
 #[get("/")]
 async fn root() -> impl Responder {
@@ -33,9 +55,13 @@ async fn root() -> impl Responder {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    let pool = db::create_pool().await.expect("failed to connect to database");
     println!("listening on http://localhost:3000");
-    HttpServer::new(|| App::new().service(root))
-        .bind(("0.0.0.0", 3000))?
-        .run()
-        .await
+    HttpServer::new(move || {
+        let app = App::new().service(root);
+        app.app_data(actix_web::web::Data::new(pool.clone()))
+    })
+    .bind(("0.0.0.0", 3000))?
+    .run()
+    .await
 }

@@ -45,7 +45,8 @@ fn new_generates_backend_project_without_prompts() {
         .current_dir(tmp.path())
         .assert()
         .success()
-        .stdout(predicate::str::contains("created ./sample-app"));
+        .stdout(predicate::str::contains("created ./sample-app"))
+        .stdout(predicate::str::contains(".env.example"));
 
     let project = tmp.path().join("sample-app");
     let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read Cargo.toml");

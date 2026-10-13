@@ -4,7 +4,7 @@ use colored::Colorize;
 
 use crate::cli::{Command, NewArgs};
 use crate::color::{FERRIS_TEAL, RUST_ORANGE, STEEL_GRAY};
-use crate::spec::ProjectSpec;
+use crate::spec::{Database, ProjectSpec, WebAppSpec};
 
 mod cli;
 mod color;
@@ -47,7 +47,13 @@ fn run_new(args: NewArgs) -> Result<(), Error> {
         ProjectSpec::Library => "cargo test",
         _ => "cargo run",
     };
-    println!("\nnext steps:\n  cd {name}\n  {first_command}");
+    println!("\nnext steps:\n  cd {name}");
+    if let ProjectSpec::WebApp(WebAppSpec::Backend(backend)) = &spec {
+        if backend.database == Database::SQLx {
+            println!("  cp .env.example .env  # set DATABASE_URL");
+        }
+    }
+    println!("  {first_command}");
     Ok(())
 }
 

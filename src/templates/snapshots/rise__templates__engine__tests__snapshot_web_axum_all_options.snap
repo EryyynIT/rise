@@ -1,6 +1,6 @@
 ---
 source: src/templates/engine.rs
-expression: "snapshot_output(&backend_spec_full(Backend::Actix, Database::SQLx,\nDeployment::Docker, vec![Testing::Api, Testing::SQLx, Testing::Mock],\nvec![],))"
+expression: "snapshot_output(&backend_spec_full(Backend::Axum, Database::SQLx,\nDeployment::Docker, vec![Testing::Api, Testing::SQLx, Testing::Mock],\nvec![Feature::WebSockets],))"
 ---
 === .env.example ===
 DATABASE_URL=postgres://postgres:postgres@localhost/sample_app
@@ -16,10 +16,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-actix-web = "4"
+axum = { version = "0.8", features = ["ws"] }
+tokio = { version = "1", features = ["full"] }
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }
 
 [dev-dependencies]
+tower = "0.5"
 mockall = "0.13"
 
 === Dockerfile ===
@@ -52,45 +54,69 @@ pub async fn create_pool() -> Result<PgPool, sqlx::Error> {
 }
 
 === src/main.rs ===
-use actix_web::{App, HttpServer, Responder, get};
+use axum::{Router, routing::get};
+use axum::{
+    extract::ws::{Message, WebSocket, WebSocketUpgrade},
+    response::Response,
+};
 
 mod db;
 
-#[get("/")]
-async fn root() -> impl Responder {
+#[tokio::main]
+async fn main() {
+    let app = Router::new().route("/", get(root));
+    let app = app.route("/ws", get(ws_handler));
+    let pool = db::create_pool().await.expect("failed to connect to database");
+    let app = app.with_state(pool);
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
+        .await
+        .expect("failed to bind port 3000");
+
+    println!("listening on http://localhost:3000");
+    axum::serve(listener, app).await.expect("server error");
+}
+
+async fn root() -> &'static str {
     "Hello from sample-app!"
 }
 
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
-    let pool = db::create_pool().await.expect("failed to connect to database");
-    println!("listening on http://localhost:3000");
-    HttpServer::new(move || {
-        let app = App::new().service(root);
-        app.app_data(actix_web::web::Data::new(pool.clone()))
-    })
-    .bind(("0.0.0.0", 3000))?
-    .run()
-    .await
+/// WebSocket echo endpoint: sends every text message back.
+async fn ws_handler(ws: WebSocketUpgrade) -> Response {
+    ws.on_upgrade(handle_socket)
+}
+
+async fn handle_socket(mut socket: WebSocket) {
+    while let Some(Ok(Message::Text(text))) = socket.recv().await {
+        if socket.send(Message::Text(text)).await.is_err() {
+            break;
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use actix_web::{App, http::StatusCode, test};
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use tower::ServiceExt;
 
-    #[actix_web::test]
+    #[tokio::test]
     async fn root_says_hello() {
-        let app = test::init_service(App::new().service(root)).await;
-        let req = test::TestRequest::get().uri("/").to_request();
-        let resp = test::call_service(&app, req).await;
-        assert_eq!(resp.status(), StatusCode::OK);
+        let app = Router::new().route("/", get(root));
+        let response = app
+            .oneshot(Request::get("/").body(Body::empty()).expect("request"))
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }
 
 #[cfg(test)]
 mod db_tests {
-    #[actix_web::test]
+    #[tokio::test]
     #[ignore = "needs a running Postgres (set DATABASE_URL)"]
     async fn pool_connects() {
         let pool = crate::db::create_pool().await.expect("connect");

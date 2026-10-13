@@ -125,6 +125,36 @@ fn new_with_testing_adds_test_module_and_dev_dependencies() {
 }
 
 #[test]
+fn new_with_websockets_adds_ws_endpoint() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "ws-app",
+            "--backend",
+            "axum",
+            "--db",
+            "sqlx",
+            "--deployment",
+            "docker",
+            "--features",
+            "web-sockets",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let project = tmp.path().join("ws-app");
+    let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read Cargo.toml");
+    assert!(cargo_toml.contains("features = [\"ws\"]"));
+    let main_rs = std::fs::read_to_string(project.join("src/main.rs")).expect("read main.rs");
+    assert!(main_rs.contains("route(\"/ws\", get(ws_handler))"));
+}
+
+#[test]
 fn sqlx_testing_without_sqlx_database_is_rejected() {
     Command::cargo_bin("rise")
         .expect("binary")

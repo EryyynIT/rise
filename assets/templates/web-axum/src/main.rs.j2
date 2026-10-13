@@ -1,4 +1,10 @@
 use axum::{Router, routing::get};
+{%- if 'web-sockets' in spec.WebApp.Backend.features %}
+use axum::{
+    extract::ws::{Message, WebSocket, WebSocketUpgrade},
+    response::Response,
+};
+{%- endif %}
 {%- if spec.WebApp.Backend.database == 'sqlx' %}
 
 mod db;
@@ -7,6 +13,9 @@ mod db;
 #[tokio::main]
 async fn main() {
     let app = Router::new().route("/", get(root));
+{%- if 'web-sockets' in spec.WebApp.Backend.features %}
+    let app = app.route("/ws", get(ws_handler));
+{%- endif %}
 {%- if spec.WebApp.Backend.database == 'sqlx' %}
     let pool = db::create_pool().await.expect("failed to connect to database");
     let app = app.with_state(pool);
@@ -23,6 +32,21 @@ async fn main() {
 async fn root() -> &'static str {
     "Hello from {{ name }}!"
 }
+{%- if 'web-sockets' in spec.WebApp.Backend.features %}
+
+/// WebSocket echo endpoint: sends every text message back.
+async fn ws_handler(ws: WebSocketUpgrade) -> Response {
+    ws.on_upgrade(handle_socket)
+}
+
+async fn handle_socket(mut socket: WebSocket) {
+    while let Some(Ok(Message::Text(text))) = socket.recv().await {
+        if socket.send(Message::Text(text)).await.is_err() {
+            break;
+        }
+    }
+}
+{%- endif %}
 {%- if 'api' in spec.WebApp.Backend.testing %}
 
 #[cfg(test)]

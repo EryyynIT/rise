@@ -1,4 +1,7 @@
 use actix_web::{App, HttpServer, Responder, get};
+{%- if 'web-sockets' in spec.WebApp.Backend.features %}
+use actix_web::{HttpRequest, HttpResponse};
+{%- endif %}
 {%- if spec.WebApp.Backend.database == 'sqlx' %}
 
 mod db;
@@ -8,6 +11,25 @@ mod db;
 async fn root() -> impl Responder {
     "Hello from {{ name }}!"
 }
+{%- if 'web-sockets' in spec.WebApp.Backend.features %}
+
+/// WebSocket echo endpoint: sends every text message back.
+#[get("/ws")]
+async fn ws(
+    req: HttpRequest,
+    body: actix_web::web::Payload,
+) -> actix_web::Result<HttpResponse> {
+    let (response, mut session, mut msg_stream) = actix_ws::handle(&req, body)?;
+    actix_web::rt::spawn(async move {
+        while let Some(Ok(actix_ws::Message::Text(text))) = msg_stream.recv().await {
+            if session.text(text).await.is_err() {
+                break;
+            }
+        }
+    });
+    Ok(response)
+}
+{%- endif %}
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -17,6 +39,9 @@ async fn main() -> std::io::Result<()> {
     println!("listening on http://localhost:3000");
     HttpServer::new(move || {
         let app = App::new().service(root);
+{%- if 'web-sockets' in spec.WebApp.Backend.features %}
+        let app = app.service(ws);
+{%- endif %}
 {%- if spec.WebApp.Backend.database == 'sqlx' %}
         app.app_data(actix_web::web::Data::new(pool.clone()))
 {%- else %}

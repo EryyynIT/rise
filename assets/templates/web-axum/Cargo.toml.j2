@@ -4,7 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+{%- if 'web-sockets' in spec.WebApp.Backend.features %}
+axum = { version = "0.8", features = ["ws"] }
+{%- else %}
 axum = "0.8"
+{%- endif %}
 tokio = { version = "1", features = ["full"] }
 {%- if spec.WebApp.Backend.database == 'sqlx' %}
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }

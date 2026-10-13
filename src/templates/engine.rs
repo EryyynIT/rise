@@ -503,6 +503,66 @@ mod tests {
         assert!(!cargo_toml.contains("[dev-dependencies]"));
     }
 
+    #[test]
+    fn websockets_add_ws_route_and_axum_feature() {
+        let spec = backend_spec_full(
+            Backend::Axum,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![],
+            vec![Feature::WebSockets],
+        );
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("web-axum").expect("template");
+
+        render_into(&template, &spec, "app", tmp.path()).expect("render");
+
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        assert!(cargo_toml.contains("features = [\"ws\"]"));
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("route(\"/ws\", get(ws_handler))"));
+        assert!(main_rs.contains("WebSocketUpgrade"));
+    }
+
+    #[test]
+    fn actix_websockets_add_actix_ws_endpoint() {
+        let spec = backend_spec_full(
+            Backend::Actix,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![],
+            vec![Feature::WebSockets],
+        );
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("web-actix").expect("template");
+
+        render_into(&template, &spec, "app", tmp.path()).expect("render");
+
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        assert!(cargo_toml.contains("actix-ws"));
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("service(ws)"));
+    }
+
+    #[test]
+    fn without_websockets_no_ws_content() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("web-axum").expect("template");
+
+        render_into(
+            &template,
+            &backend_spec(Backend::Axum, Deployment::Docker),
+            "app",
+            tmp.path(),
+        )
+        .expect("render");
+
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        assert!(!cargo_toml.contains("features = [\"ws\"]"));
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(!main_rs.contains("/ws"));
+    }
+
     // --- Output snapshots ---
     //
     // The whole generated tree as one deterministic string, snapshotted with
@@ -543,24 +603,24 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_web_axum_full_testing() {
+    fn snapshot_web_axum_all_options() {
         insta::assert_snapshot!(snapshot_output(&backend_spec_full(
             Backend::Axum,
             Database::SQLx,
             Deployment::Docker,
             vec![Testing::Api, Testing::SQLx, Testing::Mock],
-            vec![],
+            vec![Feature::WebSockets],
         )));
     }
 
     #[test]
-    fn snapshot_web_actix_full_testing() {
+    fn snapshot_web_actix_all_options() {
         insta::assert_snapshot!(snapshot_output(&backend_spec_full(
             Backend::Actix,
             Database::SQLx,
             Deployment::Docker,
             vec![Testing::Api, Testing::SQLx, Testing::Mock],
-            vec![],
+            vec![Feature::WebSockets],
         )));
     }
 

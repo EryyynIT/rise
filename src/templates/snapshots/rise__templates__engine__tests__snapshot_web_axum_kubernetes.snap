@@ -2,9 +2,11 @@
 source: src/templates/engine.rs
 expression: "snapshot_output(&backend_spec(Backend::Axum, Deployment::Kubernetes))"
 ---
+=== .env.example ===
+DATABASE_URL=postgres://postgres:postgres@localhost/sample_app
 === .gitignore ===
 /target
-
+.env
 === Cargo.toml ===
 [package]
 name = "sample-app"
@@ -14,12 +16,34 @@ edition = "2024"
 [dependencies]
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }
+=== src/db.rs ===
+//! Database connection pool (sqlx + Postgres).
+
+use sqlx::{PgPool, postgres::PgPoolOptions};
+
+/// Build a connection pool from the `DATABASE_URL` environment variable.
+///
+/// Copy `.env.example` to `.env` and adjust the URL for your database.
+/// Queries use sqlx's runtime-checked API, so the project compiles without
+/// a live database; `DATABASE_URL` is only needed at run time.
+pub async fn create_pool() -> Result<PgPool, sqlx::Error> {
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&database_url)
+        .await
+}
 === src/main.rs ===
 use axum::{Router, routing::get};
+
+mod db;
 
 #[tokio::main]
 async fn main() {
     let app = Router::new().route("/", get(root));
+    let pool = db::create_pool().await.expect("failed to connect to database");
+    let app = app.with_state(pool);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
         .await

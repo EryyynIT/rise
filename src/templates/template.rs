@@ -238,7 +238,9 @@ Dockerfile = "spec.WebApp.Backend.deployment != 'docker'"
 
         assert!(paths.contains(&"Cargo.toml.j2"));
         assert!(paths.contains(&"src/main.rs.j2"));
-        assert!(paths.contains(&".gitignore"));
+        assert!(paths.contains(&"src/db.rs.j2"));
+        assert!(paths.contains(&".gitignore.j2"));
+        assert!(paths.contains(&".env.example.j2"));
         assert!(!paths.contains(&"template.toml"));
     }
 

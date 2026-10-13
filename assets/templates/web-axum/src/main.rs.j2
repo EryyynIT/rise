@@ -1,8 +1,16 @@
 use axum::{Router, routing::get};
+{%- if spec.WebApp.Backend.database == 'sqlx' %}
+
+mod db;
+{%- endif %}
 
 #[tokio::main]
 async fn main() {
     let app = Router::new().route("/", get(root));
+{%- if spec.WebApp.Backend.database == 'sqlx' %}
+    let pool = db::create_pool().await.expect("failed to connect to database");
+    let app = app.with_state(pool);
+{%- endif %}
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
         .await

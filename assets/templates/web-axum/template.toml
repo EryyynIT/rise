@@ -6,3 +6,5 @@ description = "Backend on Axum + tokio"
 # render context — is true, the file is skipped.
 [files.exclude_if]
 Dockerfile = "spec.WebApp.Backend.deployment != 'docker'"
+"src/db.rs" = "spec.WebApp.Backend.database != 'sqlx'"
+".env.example" = "spec.WebApp.Backend.database != 'sqlx'"

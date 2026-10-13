@@ -92,6 +92,13 @@ fn render_into(template: &Template, spec: &ProjectSpec, name: &str, target: &Pat
     // A typo in a template variable must fail the render, not silently
     // produce empty strings.
     env.set_undefined_behavior(minijinja::UndefinedBehavior::Strict);
+    // Generated text files should end with a newline; minijinja strips
+    // the template's final one by default (Jinja2 compatibility).
+    let syntax = minijinja::syntax::SyntaxConfig::builder()
+        .keep_trailing_newline(true)
+        .build()
+        .expect("default syntax config is valid");
+    env.set_syntax(syntax);
 
     let ctx = Value::from(Serde(RenderContext { name, spec }));
     let excluded = excluded_paths(template, &env, &ctx)?;

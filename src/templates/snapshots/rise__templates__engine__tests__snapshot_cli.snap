@@ -13,6 +13,7 @@ edition = "2024"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
+
 === src/main.rs ===
 use clap::Parser;
 

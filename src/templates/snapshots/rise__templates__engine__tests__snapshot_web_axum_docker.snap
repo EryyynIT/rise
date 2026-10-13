@@ -4,9 +4,11 @@ expression: "snapshot_output(&backend_spec(Backend::Axum, Deployment::Docker))"
 ---
 === .env.example ===
 DATABASE_URL=postgres://postgres:postgres@localhost/sample_app
+
 === .gitignore ===
 /target
 .env
+
 === Cargo.toml ===
 [package]
 name = "sample-app"
@@ -17,6 +19,7 @@ edition = "2024"
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }
+
 === Dockerfile ===
 FROM rust:1-slim AS builder
 WORKDIR /app
@@ -27,6 +30,7 @@ FROM debian:bookworm-slim
 COPY --from=builder /app/target/release/sample-app /usr/local/bin/app
 EXPOSE 3000
 CMD ["app"]
+
 === src/db.rs ===
 //! Database connection pool (sqlx + Postgres).
 
@@ -44,6 +48,7 @@ pub async fn create_pool() -> Result<PgPool, sqlx::Error> {
         .connect(&database_url)
         .await
 }
+
 === src/main.rs ===
 use axum::{Router, routing::get};
 

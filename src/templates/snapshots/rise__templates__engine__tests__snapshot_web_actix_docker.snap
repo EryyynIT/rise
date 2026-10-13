@@ -4,9 +4,11 @@ expression: "snapshot_output(&backend_spec(Backend::Actix, Deployment::Docker))"
 ---
 === .env.example ===
 DATABASE_URL=postgres://postgres:postgres@localhost/sample_app
+
 === .gitignore ===
 /target
 .env
+
 === Cargo.toml ===
 [package]
 name = "sample-app"
@@ -16,6 +18,7 @@ edition = "2024"
 [dependencies]
 actix-web = "4"
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }
+
 === Dockerfile ===
 FROM rust:1-slim AS builder
 WORKDIR /app
@@ -26,6 +29,7 @@ FROM debian:bookworm-slim
 COPY --from=builder /app/target/release/sample-app /usr/local/bin/app
 EXPOSE 3000
 CMD ["app"]
+
 === src/db.rs ===
 //! Database connection pool (sqlx + Postgres).
 
@@ -43,6 +47,7 @@ pub async fn create_pool() -> Result<PgPool, sqlx::Error> {
         .connect(&database_url)
         .await
 }
+
 === src/main.rs ===
 use actix_web::{App, HttpServer, Responder, get};
 

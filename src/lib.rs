@@ -4,6 +4,7 @@ use colored::Colorize;
 
 use crate::cli::{Command, NewArgs};
 use crate::color::{FERRIS_TEAL, RUST_ORANGE, STEEL_GRAY};
+use crate::spec::ProjectSpec;
 
 mod cli;
 mod color;
@@ -42,7 +43,11 @@ fn run_new(args: NewArgs) -> Result<(), Error> {
     init_git(&path);
 
     println!("created ./{}", path.display());
-    println!("\nnext steps:\n  cd {name}\n  cargo run");
+    let first_command = match spec {
+        ProjectSpec::Library => "cargo test",
+        _ => "cargo run",
+    };
+    println!("\nnext steps:\n  cd {name}\n  {first_command}");
     Ok(())
 }
 

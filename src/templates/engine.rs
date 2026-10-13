@@ -57,8 +57,8 @@ fn template_id(spec: &ProjectSpec) -> Result<&'static str> {
         ProjectSpec::WebApp(WebAppSpec::Fullstack(_)) => {
             Err(Error::TemplateNotFound("web-fullstack".into()))
         }
-        ProjectSpec::CliApp => Err(Error::TemplateNotFound("cli".into())),
-        ProjectSpec::Library => Err(Error::TemplateNotFound("library".into())),
+        ProjectSpec::CliApp => Ok("cli"),
+        ProjectSpec::Library => Ok("library"),
         ProjectSpec::Embedded => Err(Error::TemplateNotFound("embedded".into())),
         ProjectSpec::Game => Err(Error::TemplateNotFound("game".into())),
     }
@@ -193,13 +193,29 @@ mod tests {
     }
 
     #[test]
+    fn cli_app_maps_to_cli() {
+        assert_eq!(
+            template_id(&ProjectSpec::CliApp).expect("template id"),
+            "cli"
+        );
+    }
+
+    #[test]
+    fn library_maps_to_library() {
+        assert_eq!(
+            template_id(&ProjectSpec::Library).expect("template id"),
+            "library"
+        );
+    }
+
+    #[test]
     fn unsupported_stack_is_template_not_found() {
         let err = template_id(&backend_spec(Backend::Rocket, Deployment::Docker))
             .expect_err("no rocket template yet");
         assert!(matches!(err, Error::TemplateNotFound(id) if id == "web-rocket"));
 
-        let err = template_id(&ProjectSpec::CliApp).expect_err("no cli template yet");
-        assert!(matches!(err, Error::TemplateNotFound(id) if id == "cli"));
+        let err = template_id(&ProjectSpec::Embedded).expect_err("no embedded template yet");
+        assert!(matches!(err, Error::TemplateNotFound(id) if id == "embedded"));
     }
 
     #[test]
@@ -289,6 +305,34 @@ mod tests {
 
         assert!(!tmp.path().join("Dockerfile").exists());
         assert!(tmp.path().join("src/main.rs").exists());
+    }
+
+    #[test]
+    fn cli_template_renders_clap_scaffold() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("cli").expect("template");
+
+        render_into(&template, &ProjectSpec::CliApp, "greeter", tmp.path()).expect("render");
+
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        assert!(cargo_toml.contains("name = \"greeter\""));
+        assert!(cargo_toml.contains("clap"));
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("greeter"));
+        assert!(!tmp.path().join("src/lib.rs").exists());
+    }
+
+    #[test]
+    fn library_template_renders_lib_with_test_stub() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("library").expect("template");
+
+        render_into(&template, &ProjectSpec::Library, "mathlib", tmp.path()).expect("render");
+
+        let lib_rs = fs::read_to_string(tmp.path().join("src/lib.rs")).expect("read");
+        assert!(lib_rs.contains("mathlib"));
+        assert!(lib_rs.contains("#[cfg(test)]"));
+        assert!(!tmp.path().join("src/main.rs").exists());
     }
 
     #[test]

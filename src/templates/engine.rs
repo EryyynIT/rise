@@ -45,6 +45,7 @@ fn template_id(spec: &ProjectSpec) -> Result<&'static str> {
     match spec {
         ProjectSpec::WebApp(WebAppSpec::Backend(backend)) => match backend.backend {
             Backend::Axum => Ok("web-axum"),
+            Backend::Actix => Ok("web-actix"),
             other => Err(Error::TemplateNotFound(format!(
                 "web-{}",
                 other.to_string().to_lowercase()
@@ -186,10 +187,16 @@ mod tests {
     }
 
     #[test]
+    fn actix_backend_maps_to_web_actix() {
+        let spec = backend_spec(Backend::Actix, Deployment::Docker);
+        assert_eq!(template_id(&spec).expect("template id"), "web-actix");
+    }
+
+    #[test]
     fn unsupported_stack_is_template_not_found() {
-        let err = template_id(&backend_spec(Backend::Actix, Deployment::Docker))
-            .expect_err("no actix template yet");
-        assert!(matches!(err, Error::TemplateNotFound(id) if id == "web-actix"));
+        let err = template_id(&backend_spec(Backend::Rocket, Deployment::Docker))
+            .expect_err("no rocket template yet");
+        assert!(matches!(err, Error::TemplateNotFound(id) if id == "web-rocket"));
 
         let err = template_id(&ProjectSpec::CliApp).expect_err("no cli template yet");
         assert!(matches!(err, Error::TemplateNotFound(id) if id == "cli"));
@@ -246,6 +253,42 @@ mod tests {
 
         let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
         assert!(cargo_toml.contains("name = \"super-app\""));
+    }
+
+    #[test]
+    fn actix_template_renders_project_name() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("web-actix").expect("template");
+
+        render_into(
+            &template,
+            &backend_spec(Backend::Actix, Deployment::Docker),
+            "super-app",
+            tmp.path(),
+        )
+        .expect("render");
+
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("Hello from super-app!"));
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        assert!(cargo_toml.contains("actix-web"));
+    }
+
+    #[test]
+    fn actix_non_docker_deployment_excludes_dockerfile() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("web-actix").expect("template");
+
+        render_into(
+            &template,
+            &backend_spec(Backend::Actix, Deployment::Kubernetes),
+            "app",
+            tmp.path(),
+        )
+        .expect("render");
+
+        assert!(!tmp.path().join("Dockerfile").exists());
+        assert!(tmp.path().join("src/main.rs").exists());
     }
 
     #[test]

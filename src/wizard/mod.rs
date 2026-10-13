@@ -15,7 +15,7 @@ use strum::IntoEnumIterator;
 use crate::cli::{NewArgs, WebFlags};
 use crate::error::{Error, Result};
 use crate::name::ProjectName;
-use crate::spec::{ProjectKind, ProjectSpec};
+use crate::spec::{Database, ProjectKind, ProjectSpec, Testing};
 use crate::wizard::render::render_cfg;
 
 /// Whether the wizard may ask questions.
@@ -90,6 +90,17 @@ fn validate_flags(args: &NewArgs) -> Result<()> {
             }
             _ => {}
         }
+    }
+
+    // sqlx-based tests need the sqlx database stack they exercise.
+    let testing_sqlx = web
+        .testing
+        .as_ref()
+        .is_some_and(|testing| testing.contains(&Testing::SQLx));
+    if testing_sqlx && web.database != Some(Database::SQLx) {
+        return Err(Error::ConflictingOptions(
+            "`--testing sqlx` requires `--db sqlx`".into(),
+        ));
     }
     Ok(())
 }
@@ -231,6 +242,37 @@ mod tests {
             web: WebFlags {
                 frontend: Some(Frontend::React),
                 deployment: Some(Deployment::Docker),
+                ..WebFlags::default()
+            },
+            ..NewArgs::default()
+        };
+        assert!(validate_flags(&args).is_ok());
+    }
+
+    #[test]
+    fn sqlx_testing_requires_sqlx_database() {
+        let args = NewArgs {
+            web: WebFlags {
+                backend: Some(Backend::Axum),
+                database: Some(Database::Diesel),
+                testing: Some(vec![Testing::SQLx]),
+                ..WebFlags::default()
+            },
+            ..NewArgs::default()
+        };
+        assert!(matches!(
+            validate_flags(&args),
+            Err(Error::ConflictingOptions(_))
+        ));
+    }
+
+    #[test]
+    fn sqlx_testing_with_sqlx_database_is_fine() {
+        let args = NewArgs {
+            web: WebFlags {
+                backend: Some(Backend::Axum),
+                database: Some(Database::SQLx),
+                testing: Some(vec![Testing::SQLx]),
                 ..WebFlags::default()
             },
             ..NewArgs::default()

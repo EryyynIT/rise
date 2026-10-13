@@ -1,0 +1,8 @@
+name = "web-actix"
+description = "Backend on Actix Web"
+
+# File conditionality lives here, not in Rust code. Keys are OUTPUT paths
+# (`.j2` already stripped); when the expression — evaluated against the
+# render context — is true, the file is skipped.
+[files.exclude_if]
+Dockerfile = "spec.WebApp.Backend.deployment != 'docker'"

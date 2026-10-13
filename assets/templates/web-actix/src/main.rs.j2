@@ -1,0 +1,15 @@
+use actix_web::{App, HttpServer, Responder, get};
+
+#[get("/")]
+async fn root() -> impl Responder {
+    "Hello from {{ name }}!"
+}
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    println!("listening on http://localhost:3000");
+    HttpServer::new(|| App::new().service(root))
+        .bind(("0.0.0.0", 3000))?
+        .run()
+        .await
+}

@@ -92,6 +92,61 @@ fn new_with_non_sqlx_database_adds_only_the_dependency() {
 }
 
 #[test]
+fn new_with_testing_adds_test_module_and_dev_dependencies() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "tested-app",
+            "--backend",
+            "axum",
+            "--db",
+            "sqlx",
+            "--deployment",
+            "docker",
+            "--testing",
+            "api,sqlx,mock",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let project = tmp.path().join("tested-app");
+    let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read Cargo.toml");
+    assert!(cargo_toml.contains("[dev-dependencies]"));
+    assert!(cargo_toml.contains("tower"));
+    assert!(cargo_toml.contains("mockall"));
+    let main_rs = std::fs::read_to_string(project.join("src/main.rs")).expect("read main.rs");
+    assert!(main_rs.contains("mod tests"));
+    assert!(main_rs.contains("mod db_tests"));
+}
+
+#[test]
+fn sqlx_testing_without_sqlx_database_is_rejected() {
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "sample-app",
+            "--backend",
+            "axum",
+            "--db",
+            "diesel",
+            "--testing",
+            "sqlx",
+            "--no-input",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "`--testing sqlx` requires `--db sqlx`",
+        ));
+}
+
+#[test]
 fn new_generates_actix_project_without_prompts() {
     let tmp = tempfile::tempdir().expect("tempdir");
 

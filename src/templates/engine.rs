@@ -175,15 +175,25 @@ fn safe_join(target: &Path, rel: &str) -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::spec::{BackendSpec, Database, Deployment};
+    use crate::spec::{BackendSpec, Database, Deployment, Feature, Testing};
 
     fn backend_spec(backend: Backend, deployment: Deployment) -> ProjectSpec {
+        backend_spec_full(backend, Database::SQLx, deployment, vec![], vec![])
+    }
+
+    fn backend_spec_full(
+        backend: Backend,
+        database: Database,
+        deployment: Deployment,
+        testing: Vec<Testing>,
+        features: Vec<Feature>,
+    ) -> ProjectSpec {
         ProjectSpec::WebApp(WebAppSpec::Backend(BackendSpec {
             backend,
-            database: Database::SQLx,
+            database,
             deployment,
-            testing: vec![],
-            features: vec![],
+            testing,
+            features,
         }))
     }
 
@@ -418,6 +428,81 @@ mod tests {
         assert!(main_rs.contains("app_data(actix_web::web::Data::new(pool.clone()))"));
     }
 
+    #[test]
+    fn api_testing_adds_test_module_and_dev_dependency() {
+        let spec = backend_spec_full(
+            Backend::Axum,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![Testing::Api, Testing::Mock],
+            vec![],
+        );
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("web-axum").expect("template");
+
+        render_into(&template, &spec, "app", tmp.path()).expect("render");
+
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("#[cfg(test)]"));
+        assert!(main_rs.contains("oneshot"));
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        assert!(cargo_toml.contains("[dev-dependencies]"));
+        assert!(cargo_toml.contains("tower"));
+        assert!(cargo_toml.contains("mockall"));
+    }
+
+    #[test]
+    fn sqlx_testing_adds_pool_test_only_with_sqlx_database() {
+        let with_sqlx = backend_spec_full(
+            Backend::Axum,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![Testing::SQLx],
+            vec![],
+        );
+        let with_diesel = backend_spec_full(
+            Backend::Axum,
+            Database::Diesel,
+            Deployment::Docker,
+            vec![Testing::SQLx],
+            vec![],
+        );
+        let template = Template::embedded("web-axum").expect("template");
+
+        let tmp = tempfile::tempdir().expect("tempdir");
+        render_into(&template, &with_sqlx, "app", tmp.path()).expect("render");
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("mod db_tests"));
+
+        let tmp = tempfile::tempdir().expect("tempdir");
+        render_into(&template, &with_diesel, "app", tmp.path()).expect("render");
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(
+            !main_rs.contains("mod db_tests"),
+            "no sqlx pool to test without sqlx"
+        );
+    }
+
+    #[test]
+    fn actix_api_testing_needs_no_dev_dependencies() {
+        let spec = backend_spec_full(
+            Backend::Actix,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![Testing::Api],
+            vec![],
+        );
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("web-actix").expect("template");
+
+        render_into(&template, &spec, "app", tmp.path()).expect("render");
+
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("actix_web::test"));
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        assert!(!cargo_toml.contains("[dev-dependencies]"));
+    }
+
     // --- Output snapshots ---
     //
     // The whole generated tree as one deterministic string, snapshotted with
@@ -454,6 +539,39 @@ mod tests {
         insta::assert_snapshot!(snapshot_output(&backend_spec(
             Backend::Actix,
             Deployment::Kubernetes
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_axum_full_testing() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Axum,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![Testing::Api, Testing::SQLx, Testing::Mock],
+            vec![],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_full_testing() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Actix,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![Testing::Api, Testing::SQLx, Testing::Mock],
+            vec![],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_axum_diesel_deps_only() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Axum,
+            Database::Diesel,
+            Deployment::Kubernetes,
+            vec![],
+            vec![],
         )));
     }
 

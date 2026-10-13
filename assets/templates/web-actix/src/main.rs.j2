@@ -27,3 +27,35 @@ async fn main() -> std::io::Result<()> {
     .run()
     .await
 }
+{%- if 'api' in spec.WebApp.Backend.testing %}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::{App, http::StatusCode, test};
+
+    #[actix_web::test]
+    async fn root_says_hello() {
+        let app = test::init_service(App::new().service(root)).await;
+        let req = test::TestRequest::get().uri("/").to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+}
+{%- endif %}
+{%- if 'sqlx' in spec.WebApp.Backend.testing and spec.WebApp.Backend.database == 'sqlx' %}
+
+#[cfg(test)]
+mod db_tests {
+    #[actix_web::test]
+    #[ignore = "needs a running Postgres (set DATABASE_URL)"]
+    async fn pool_connects() {
+        let pool = crate::db::create_pool().await.expect("connect");
+        let row: (i64,) = sqlx::query_as("SELECT 1")
+            .fetch_one(&pool)
+            .await
+            .expect("query");
+        assert_eq!(row.0, 1);
+    }
+}
+{%- endif %}

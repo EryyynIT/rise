@@ -15,6 +15,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stub.
 - The next-steps hint after generation matches the project kind: `cargo run`,
   or `cargo test` for libraries.
+- The web templates now honor the `database` choice: `sqlx` adds the sqlx
+  dependency, a `src/db.rs` connection pool, `.env.example` and a `.env`
+  gitignore entry; Diesel, SeaORM and Sled add their dependency only. The
+  pool uses sqlx's runtime-checked API, so the project compiles offline.
+- The web templates now honor the `testing` choice: `api` adds a smoke test
+  (`tower` oneshot for Axum, `actix_web::test` for Actix Web), `sqlx` adds an
+  ignored pool-connectivity test, `mock` adds the mockall dev-dependency.
+- `--features web-sockets` adds a WebSocket echo endpoint (`/ws`) to both web
+  templates.
+- Next steps for sqlx projects mention `cp .env.example .env`.
+
+### Changed
+
+- `--testing sqlx` without `--db sqlx` is rejected as conflicting options
+  (the generated tests would have no sqlx pool to exercise).
+
+### Fixed
+
+- Rendered files keep their trailing newline (minijinja strips it by
+  default).
 
 ## [0.1.0] - 2026-10-13
 

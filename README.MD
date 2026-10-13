@@ -10,25 +10,34 @@ Choose your stack, generate the boilerplate, and ship something spicy.
 
 --
 
-## ⚠️ Not published on `crates.io` yet
+## 📦 Installation
 
-This project is still under active development. There's no `cargo install rise` — **yet**.
+```bash
+cargo install rise-cli --locked
+```
+
+The binary is called `rise` — the plain name was already taken on crates.io, so the package is `rise-cli`.
 
 --
 
 ## Quick Start (for the impatient)
 
 ```bash
-git clone https://github.com/EryyynIT/rise
-cd rise
-cargo run
+rise            # interactive wizard
 ```
 
-Yes, it's that simple. No, we don't have a fancy installer yet.
+or script it with flags:
+
+```bash
+rise new myapp --kind web --backend axum --deployment docker
+cd myapp && cargo run
+```
+
+Yes, it's that simple. Prebuilt binaries and shell installers are on the way.
 
 ## Future roadmap teaser
 
--[] `cargo install rise` (when we're fancy)
+-[x] `cargo install rise-cli` (binary: `rise`)
 
 -[x] Better error handling with crates like `thiserror`
 

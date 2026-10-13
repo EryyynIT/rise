@@ -53,6 +53,42 @@ fn new_generates_backend_project_without_prompts() {
     assert!(project.join("src/main.rs").exists());
     assert!(project.join("Dockerfile").exists());
     assert!(project.join(".git").exists(), "git init ran");
+
+    // --db sqlx wires the full database stack.
+    assert!(cargo_toml.contains("sqlx"));
+    assert!(project.join("src/db.rs").exists());
+    assert!(project.join(".env.example").exists());
+    let gitignore = std::fs::read_to_string(project.join(".gitignore")).expect("read .gitignore");
+    assert!(gitignore.contains(".env"));
+}
+
+#[test]
+fn new_with_non_sqlx_database_adds_only_the_dependency() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "diesel-app",
+            "--backend",
+            "axum",
+            "--db",
+            "diesel",
+            "--deployment",
+            "self-hosted",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let project = tmp.path().join("diesel-app");
+    let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read Cargo.toml");
+    assert!(cargo_toml.contains("diesel"));
+    assert!(!cargo_toml.contains("sqlx"));
+    assert!(!project.join("src/db.rs").exists(), "sqlx-only content");
+    assert!(!project.join(".env.example").exists(), "sqlx-only content");
 }
 
 #[test]

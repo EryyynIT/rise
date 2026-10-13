@@ -346,6 +346,71 @@ mod tests {
         assert!(matches!(err, Error::TargetNotEmpty(_)));
     }
 
+    #[test]
+    fn sqlx_database_adds_pool_module_and_env_example() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("web-axum").expect("template");
+
+        render_into(
+            &template,
+            &backend_spec(Backend::Axum, Deployment::Docker),
+            "app",
+            tmp.path(),
+        )
+        .expect("render");
+
+        assert!(tmp.path().join("src/db.rs").exists());
+        assert!(tmp.path().join(".env.example").exists());
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        assert!(cargo_toml.contains("sqlx"));
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("mod db;"));
+        assert!(main_rs.contains("with_state(pool)"));
+        let gitignore = fs::read_to_string(tmp.path().join(".gitignore")).expect("read");
+        assert!(gitignore.contains(".env"));
+    }
+
+    #[test]
+    fn non_sqlx_database_adds_only_the_dependency() {
+        let spec = ProjectSpec::WebApp(WebAppSpec::Backend(BackendSpec {
+            backend: Backend::Axum,
+            database: Database::Diesel,
+            deployment: Deployment::Docker,
+            testing: vec![],
+            features: vec![],
+        }));
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("web-axum").expect("template");
+
+        render_into(&template, &spec, "app", tmp.path()).expect("render");
+
+        assert!(!tmp.path().join("src/db.rs").exists());
+        assert!(!tmp.path().join(".env.example").exists());
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        assert!(cargo_toml.contains("diesel"));
+        assert!(!cargo_toml.contains("sqlx"));
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(!main_rs.contains("mod db"));
+    }
+
+    #[test]
+    fn actix_sqlx_shares_the_pool_via_app_data() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("web-actix").expect("template");
+
+        render_into(
+            &template,
+            &backend_spec(Backend::Actix, Deployment::Docker),
+            "app",
+            tmp.path(),
+        )
+        .expect("render");
+
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("mod db;"));
+        assert!(main_rs.contains("app_data(actix_web::web::Data::new(pool.clone()))"));
+    }
+
     // --- Output snapshots ---
     //
     // The whole generated tree as one deterministic string, snapshotted with

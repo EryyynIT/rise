@@ -7,6 +7,9 @@ use actix_web::HttpResponse;
 {%- if frontend == 'yew' %}
 use actix_files::Files;
 {%- endif %}
+{%- if 'rate-limiting' in backend.features %}
+use actix_governor::{Governor, GovernorConfigBuilder};
+{%- endif %}
 {%- if frontend == 'askama' %}
 use askama::Template;
 {%- elif frontend == 'tera' %}
@@ -170,9 +173,24 @@ async fn main() -> std::io::Result<()> {
 {%- elif backend.database == 'sled' %}
     let store = db::open().expect("failed to open the database");
 {%- endif %}
+{%- if 'rate-limiting' in backend.features %}
+    // Rate limit requests per client IP: bursts of up to 5 requests,
+    // then two requests per second on average.
+    let governor_conf = GovernorConfigBuilder::default()
+        .requests_per_second(2)
+        .burst_size(5)
+        .finish()
+        .expect("valid rate limiter configuration");
+{%- endif %}
     println!("listening on http://localhost:3000");
     HttpServer::new(move || {
+{%- if 'rate-limiting' in backend.features %}
+        let app = App::new()
+            .wrap(Governor::new(&governor_conf))
+            .service({% if frontend == 'yew' %}hello{% else %}root{% endif %});
+{%- else %}
         let app = App::new().service({% if frontend == 'yew' %}hello{% else %}root{% endif %});
+{%- endif %}
 {%- if 'web-sockets' in backend.features %}
         let app = app.service(ws);
 {%- endif %}
@@ -188,8 +206,6 @@ async fn main() -> std::io::Result<()> {
         app.app_data(actix_web::web::Data::new(pool.clone()))
 {%- elif backend.database == 'sled' %}
         app.app_data(actix_web::web::Data::new(store.clone()))
-{%- else %}
-        app
 {%- endif %}
     })
     .bind(("0.0.0.0", 3000))?

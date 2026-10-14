@@ -14,6 +14,10 @@ use axum::{
 {%- if frontend == 'yew' %}
 use tower_http::services::ServeDir;
 {%- endif %}
+{%- if 'rate-limiting' in backend.features %}
+use std::net::SocketAddr;
+use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
+{%- endif %}
 {%- if frontend == 'askama' %}
 use askama::Template;
 {%- elif frontend == 'tera' %}
@@ -57,13 +61,38 @@ async fn main() {
     // Serve the WASM bundle built by trunk (`frontend/dist`) next to the API.
     let app = app.fallback_service(ServeDir::new("frontend/dist"));
 {%- endif %}
+{%- if 'rate-limiting' in backend.features %}
+    // Rate limit requests per client IP: bursts of up to 5 requests,
+    // then one request every 2 seconds on average.
+    let governor_conf = GovernorConfigBuilder::default()
+        .per_second(2)
+        .burst_size(5)
+        .finish()
+        .expect("valid rate limiter configuration");
+    // Governor's storage grows unboundedly without periodic cleanup.
+    let limiter = governor_conf.limiter().clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            limiter.retain_recent();
+        }
+    });
+    let app = app.layer(GovernorLayer::new(governor_conf));
+{%- endif %}
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
         .await
         .expect("failed to bind port 3000");
 
     println!("listening on http://localhost:3000");
+{%- if 'rate-limiting' in backend.features %}
+    // The per-IP rate limiter needs the peer address of each connection.
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
+        .await
+        .expect("server error");
+{%- else %}
     axum::serve(listener, app).await.expect("server error");
+{%- endif %}
 }
 {%- if frontend == 'askama' %}
 

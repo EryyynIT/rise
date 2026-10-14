@@ -165,7 +165,7 @@ fn complete_backend(
 /// and flag-passed values outside this list are rejected up front instead
 /// of being silently ignored.
 fn implemented_features() -> Vec<Feature> {
-    vec![Feature::WebSockets]
+    vec![Feature::WebSockets, Feature::RateLimiting]
 }
 
 /// Reject features with no template content yet, naming them by their
@@ -292,12 +292,16 @@ mod tests {
 
     #[test]
     fn implemented_features_pass_validation() {
-        validate_features(&[Feature::WebSockets]).expect("web-sockets is implemented");
+        validate_features(&[Feature::WebSockets, Feature::RateLimiting])
+            .expect("web-sockets and rate-limiting are implemented");
         validate_features(&[]).expect("no features is fine");
     }
 
     #[test]
     fn prompts_offer_only_implemented_features() {
-        assert_eq!(implemented_features(), vec![Feature::WebSockets]);
+        assert_eq!(
+            implemented_features(),
+            vec![Feature::WebSockets, Feature::RateLimiting]
+        );
     }
 }

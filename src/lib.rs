@@ -47,7 +47,6 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
     let path = templates::generate(&spec, &name, &source)?;
     init_git(&path);
 
-    println!("created ./{}", path.display());
     let wasm_frontend = match &spec {
         ProjectSpec::WebApp(WebAppSpec::Frontend(frontend)) => frontend.frontend == Frontend::Yew,
         ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack)) => {
@@ -59,7 +58,7 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
         wasm_frontend && matches!(&spec, ProjectSpec::WebApp(WebAppSpec::Fullstack(_)));
     let leptos_fullstack = matches!(&spec, ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack))
         if fullstack.frontend == Frontend::Leptos);
-    println!("\nnext steps:\n  cd {name}");
+    let mut out = format!("created ./{}\n\nnext steps:\n  cd {name}\n", path.display());
     let backend = match &spec {
         ProjectSpec::WebApp(WebAppSpec::Backend(backend)) => Some(backend),
         ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack)) => Some(&fullstack.backend),
@@ -73,29 +72,31 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
         } else {
             "DATABASE_URL"
         };
-        println!("  cp {dir}.env.example {dir}.env  # set {var}");
+        out.push_str(&format!("  cp {dir}.env.example {dir}.env  # set {var}\n"));
     }
     if wasm_frontend {
-        println!(
-            "  rustup target add wasm32-unknown-unknown && cargo install trunk  # one-time setup"
+        out.push_str(
+            "  rustup target add wasm32-unknown-unknown && cargo install trunk  # one-time setup\n",
         );
     }
     if leptos_fullstack {
-        println!(
-            "  rustup target add wasm32-unknown-unknown && cargo install --locked cargo-leptos  # one-time setup"
+        out.push_str(
+            "  rustup target add wasm32-unknown-unknown && cargo install --locked cargo-leptos  # one-time setup\n",
         );
     }
     match &spec {
-        ProjectSpec::Library => println!("  cargo test"),
+        ProjectSpec::Library => out.push_str("  cargo test\n"),
         _ if fullstack_wasm => {
-            println!("  cargo run -p {name}-backend  # terminal 1: API on :3000");
-            println!("  cd frontend && trunk serve   # terminal 2: SPA on :8080");
+            out.push_str(&format!(
+                "  cargo run -p {name}-backend  # terminal 1: API on :3000\n"
+            ));
+            out.push_str("  cd frontend && trunk serve   # terminal 2: SPA on :8080\n");
         }
-        _ if wasm_frontend => println!("  trunk serve"),
-        _ if leptos_fullstack => println!("  cargo leptos watch"),
-        _ => println!("  cargo run"),
+        _ if wasm_frontend => out.push_str("  trunk serve\n"),
+        _ if leptos_fullstack => out.push_str("  cargo leptos watch\n"),
+        _ => out.push_str("  cargo run\n"),
     }
-    Ok(())
+    print_out(out.as_bytes())
 }
 
 /// Initialize a git repository in the new project. Purely best-effort: a
@@ -115,18 +116,17 @@ fn init_git(dir: &std::path::Path) {
 
 /// `rise list`: print the embedded templates.
 fn list_templates() -> Result<(), Error> {
-    println!("available templates:");
+    let mut out = String::from("available templates:\n");
     for manifest in templates::list_embedded()? {
-        println!("  {} — {}", manifest.name, manifest.description);
+        out.push_str(&format!("  {} — {}\n", manifest.name, manifest.description));
     }
-    Ok(())
+    print_out(out.as_bytes())
 }
 
 /// `rise completions <shell>`: print the completion script to stdout, for
 /// the user to source or save into their shell's completion directory.
 fn print_completions(shell: clap_complete::Shell) -> Result<(), Error> {
     use clap::CommandFactory;
-    use std::io::Write;
     let mut command = Cli::command();
     // The package is `rise-cli`, but the installed binary is `rise`;
     // completions must register for the binary name. Render into memory
@@ -150,19 +150,30 @@ fn print_completions(shell: clap_complete::Shell) -> Result<(), Error> {
         );
         script.extend_from_slice(line.as_bytes());
     }
-    match std::io::stdout().write_all(&script) {
+    print_out(&script)
+}
+
+/// Write to stdout. A closed pipe (e.g. `rise list | head -1`) is a quiet
+/// success, per CLI convention; any other failure is reported.
+fn print_out(bytes: &[u8]) -> Result<(), Error> {
+    use std::io::Write;
+    match std::io::stdout().write_all(bytes) {
         Ok(()) => Ok(()),
         Err(err) if err.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
         Err(err) => Err(Error::Io(err)),
     }
 }
 
-/// The rise banner: crab, name, tagline.
+/// The rise banner: crab, name, tagline. Purely decorative: a stdout
+/// failure here must not abort the run.
 fn print_banner() {
-    println!(
-        "{}  {}\n    {}",
-        "🦀".custom_color(RUST_ORANGE),
-        "rise (rust initial setup engine)".custom_color(FERRIS_TEAL),
-        "fast, idiomatic, async Rust scaffolding".custom_color(STEEL_GRAY)
+    let _ = print_out(
+        format!(
+            "{}  {}\n    {}\n",
+            "🦀".custom_color(RUST_ORANGE),
+            "rise (rust initial setup engine)".custom_color(FERRIS_TEAL),
+            "fast, idiomatic, async Rust scaffolding".custom_color(STEEL_GRAY)
+        )
+        .as_bytes(),
     );
 }

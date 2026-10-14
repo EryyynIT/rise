@@ -35,6 +35,41 @@ cd myapp && cargo run
 
 Yes, it's that simple. Prebuilt binaries and shell installers live on the [Releases page](https://github.com/EryyynIT/rise/releases).
 
+## Usage
+
+Three ways to drive it:
+
+```bash
+rise                                   # interactive wizard — the main mode
+rise new myapp --kind cli              # hybrid: flags prefill, the wizard asks the gaps
+rise new myapp --kind cli --no-input   # fully scripted: missing options are an error, not a question
+```
+
+Everything the wizard asks is also a flag on `rise new`:
+
+| Flag | Values | Notes |
+|---|---|---|
+| `NAME` | a valid crate name | positional; asked first when omitted |
+| `--kind` | `web`, `cli`, `library` | inferred as `web` when any web flag is passed |
+| `--backend` | `axum`, `actix` | alone → backend-only; with `--frontend` → fullstack |
+| `--frontend` | `askama`, `tera`, `minijinja`, `handlebars` | server-side template engine rendered by the backend |
+| `--db` | `sqlx`, `diesel`, `sea-orm`, `sled` | `sqlx` wires a pool + `.env.example`; the others add the dependency |
+| `--deployment` | `docker`, `kubernetes`, `serverless`, `self-hosted` | `docker` ships a slim multi-stage Dockerfile |
+| `--testing` | `api`, `sqlx`, `mock` | repeatable, comma-separated; adds test modules and dev-dependencies |
+| `--features` | `web-sockets` | repeatable, comma-separated; adds a `/ws` echo endpoint |
+| `--template` | a template directory | render your own template — see [docs/TEMPLATES.md](docs/TEMPLATES.md) |
+| `--no-input` | | never prompt; a non-terminal stdin implies this |
+
+What generates today: Axum and Actix Web backends, fullstack variants of both
+with the four template engines above, plus `--kind cli` and `--kind library`.
+Other combinations the flags accept (`rocket`, `yew`, `embedded`, `game`, ...)
+end with a typed "not available yet" error — that's the roadmap, not a broken
+promise.
+
+Exit codes for scripting: `0` success · `1` error (message on stderr) ·
+`2` bad arguments · `130` you pressed Esc/Ctrl+C — no stack traces, no
+half-written project left behind.
+
 ## Shell completions
 
 ```bash
@@ -50,6 +85,8 @@ Copy an embedded template (or write your own — a directory with a `template.to
 ```bash
 rise new myapp --kind web --backend axum --template ./my-template
 ```
+
+The manifest format, render context and rendering rules are documented in [docs/TEMPLATES.md](docs/TEMPLATES.md).
 
 ## Future roadmap teaser
 

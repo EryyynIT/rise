@@ -319,6 +319,61 @@ fn fullstack_with_wasm_frontend_is_an_actionable_error() {
 }
 
 #[test]
+fn new_with_template_dir_uses_the_custom_template() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let template_dir = tmp.path().join("custom-template");
+    std::fs::create_dir(&template_dir).expect("mkdir");
+    std::fs::write(
+        template_dir.join("template.toml"),
+        "name = \"custom\"\ndescription = \"test template\"",
+    )
+    .expect("write manifest");
+    std::fs::write(template_dir.join("NOTE.md.j2"), "project: {{ name }}").expect("write file");
+
+    let work = tmp.path().join("work");
+    std::fs::create_dir(&work).expect("mkdir");
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "custom-app",
+            "--kind",
+            "cli",
+            "--template",
+            template_dir.to_str().expect("utf8 path"),
+            "--no-input",
+        ])
+        .current_dir(&work)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("created ./custom-app"));
+
+    let note =
+        std::fs::read_to_string(work.join("custom-app/NOTE.md")).expect("read rendered file");
+    assert_eq!(note, "project: custom-app");
+}
+
+#[test]
+fn new_with_missing_template_dir_names_the_path() {
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "custom-app",
+            "--kind",
+            "cli",
+            "--template",
+            "/nonexistent/rise-template",
+            "--no-input",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "cannot read template directory `/nonexistent/rise-template`",
+        ));
+}
+
+#[test]
 fn completions_register_for_the_binary_name() {
     // The package is `rise-cli`, but the installed binary is `rise`;
     // completion scripts must register for the binary name.

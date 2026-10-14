@@ -262,6 +262,63 @@ fn new_reports_the_missing_flag_when_non_interactive() {
 }
 
 #[test]
+fn new_generates_fullstack_project_without_prompts() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "full-app",
+            "--backend",
+            "axum",
+            "--frontend",
+            "askama",
+            "--db",
+            "sqlx",
+            "--deployment",
+            "docker",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("created ./full-app"))
+        .stdout(predicate::str::contains(".env.example"));
+
+    let project = tmp.path().join("full-app");
+    let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read Cargo.toml");
+    assert!(cargo_toml.contains("axum"));
+    assert!(cargo_toml.contains("askama"));
+    assert!(cargo_toml.contains("sqlx"));
+    assert!(project.join("templates/index.html").exists());
+    let main_rs = std::fs::read_to_string(project.join("src/main.rs")).expect("read main.rs");
+    assert!(main_rs.contains("IndexTemplate"));
+}
+
+#[test]
+fn fullstack_with_wasm_frontend_is_an_actionable_error() {
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "wasm-app",
+            "--backend",
+            "axum",
+            "--frontend",
+            "yew",
+            "--db",
+            "sqlx",
+            "--deployment",
+            "docker",
+            "--no-input",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("web-fullstack"));
+}
+
+#[test]
 fn conflicting_flags_are_rejected_before_prompts() {
     Command::cargo_bin("rise")
         .expect("binary")

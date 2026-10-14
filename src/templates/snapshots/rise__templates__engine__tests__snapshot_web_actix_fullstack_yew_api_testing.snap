@@ -2,6 +2,13 @@
 source: src/templates/engine.rs
 expression: "snapshot_output(&fullstack_spec_tested(Backend::Actix, Frontend::Yew))"
 ---
+=== .dockerignore ===
+# Keep the build context small and secrets out of image layers.
+.git
+**/target
+**/dist
+**/.env
+
 === .gitignore ===
 /target
 **/dist

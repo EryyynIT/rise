@@ -10,4 +10,5 @@ description = "Yew single-page app (WASM, built with trunk)"
 # In a fullstack workspace the root template ships the Dockerfile and
 # .gitignore.
 Dockerfile = "backend is not none or deployment != 'docker'"
+".dockerignore" = "backend is not none or deployment != 'docker'"
 ".gitignore" = "workspace"

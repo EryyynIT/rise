@@ -6,3 +6,4 @@ description = "Leptos fullstack app (SSR + hydration) on Axum, built with cargo-
 # render context — is true, the file is skipped.
 [files.exclude_if]
 Dockerfile = "deployment != 'docker'"
+".dockerignore" = "deployment != 'docker'"

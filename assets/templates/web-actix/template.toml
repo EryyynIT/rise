@@ -8,6 +8,7 @@ description = "Actix Web backend, optionally with a server-side template engine"
 # A WASM-fullstack workspace ships its own Dockerfile and .gitignore
 # at the root.
 Dockerfile = "backend.deployment != 'docker' or workspace"
+".dockerignore" = "backend.deployment != 'docker' or workspace"
 ".gitignore" = "workspace"
 # Handlebars uses its own .hbs file; askama/tera/minijinja share index.html;
 # every other frontend (or none) ships neither.

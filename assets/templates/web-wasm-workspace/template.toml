@@ -5,3 +5,4 @@ internal = true
 
 [files.exclude_if]
 Dockerfile = "backend.deployment != 'docker'"
+".dockerignore" = "backend.deployment != 'docker'"

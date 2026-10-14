@@ -2,6 +2,12 @@
 source: src/templates/engine.rs
 expression: "snapshot_output(&frontend_spec(Frontend::Yew, Deployment::Docker))"
 ---
+=== .dockerignore ===
+# Keep the build context small.
+.git
+/target
+/dist
+
 === .gitignore ===
 /target
 /dist

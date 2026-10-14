@@ -1,0 +1,4 @@
+# Keep the build context small.
+.git
+/target
+/dist

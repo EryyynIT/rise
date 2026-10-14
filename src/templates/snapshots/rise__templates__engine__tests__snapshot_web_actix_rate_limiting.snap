@@ -2,6 +2,12 @@
 source: src/templates/engine.rs
 expression: "snapshot_output(&backend_spec_full(Backend::Actix, Database::SQLx,\nDeployment::Docker, vec![], vec![Feature::RateLimiting],))"
 ---
+=== .dockerignore ===
+# Keep the build context small and secrets out of image layers.
+.git
+/target
+.env
+
 === .env.example ===
 DATABASE_URL=postgres://postgres:postgres@localhost/sample_app
 

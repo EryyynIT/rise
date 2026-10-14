@@ -1,0 +1,4 @@
+# Keep the build context small: cargo-leptos output under target/ is
+# rebuilt inside the image.
+.git
+/target

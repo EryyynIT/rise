@@ -374,6 +374,28 @@ fn new_with_missing_template_dir_names_the_path() {
 }
 
 #[test]
+fn unimplemented_features_are_rejected() {
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "grpc-app",
+            "--backend",
+            "axum",
+            "--db",
+            "sqlx",
+            "--deployment",
+            "docker",
+            "--features",
+            "grpc,web-sockets",
+            "--no-input",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("features not available yet: grpc"));
+}
+
+#[test]
 fn completions_register_for_the_binary_name() {
     // The package is `rise-cli`, but the installed binary is `rise`;
     // completion scripts must register for the binary name.

@@ -33,7 +33,23 @@ rise new myapp --kind web --backend axum --deployment docker
 cd myapp && cargo run
 ```
 
-Yes, it's that simple. Prebuilt binaries and shell installers are on the way.
+Yes, it's that simple. Prebuilt binaries and shell installers live on the [Releases page](https://github.com/EryyynIT/rise/releases).
+
+## Shell completions
+
+```bash
+rise completions bash > ~/.local/share/bash-completion/completions/rise
+```
+
+`zsh`, `fish`, `powershell` and `elvish` work too — print the script and save it where your shell looks for completions.
+
+## Bring your own templates
+
+Copy an embedded template (or write your own — a directory with a `template.toml` manifest, `.j2` files rendered with the spec), tweak it, and point rise at it:
+
+```bash
+rise new myapp --kind web --backend axum --template ./my-template
+```
 
 ## Future roadmap teaser
 

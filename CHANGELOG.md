@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `rise completions <shell>` prints a shell completion script for bash,
+  zsh, fish, powershell or elvish to stdout.
+- `--template <DIR>` on `rise new` loads the template from a directory on
+  disk instead of the embedded one for the selected stack; the spec is
+  still collected as usual and forms the render context. Unreadable
+  template directories report the offending path.
+
 ## [0.2.0] - 2026-10-14
 
 ### Added

@@ -29,10 +29,7 @@ pub use error::Error;
 pub fn run(cli: Cli) -> Result<(), Error> {
     match cli.command {
         Some(Command::List) => list_templates(),
-        Some(Command::Completions { shell }) => {
-            print_completions(shell);
-            Ok(())
-        }
+        Some(Command::Completions { shell }) => print_completions(shell),
         Some(Command::New(args)) => run_new(args),
         None => run_new(NewArgs::default()),
     }
@@ -96,12 +93,21 @@ fn list_templates() -> Result<(), Error> {
 
 /// `rise completions <shell>`: print the completion script to stdout, for
 /// the user to source or save into their shell's completion directory.
-fn print_completions(shell: clap_complete::Shell) {
+fn print_completions(shell: clap_complete::Shell) -> Result<(), Error> {
     use clap::CommandFactory;
+    use std::io::Write;
     let mut command = Cli::command();
     // The package is `rise-cli`, but the installed binary is `rise`;
-    // completions must register for the binary name.
-    clap_complete::generate(shell, &mut command, "rise", &mut std::io::stdout());
+    // completions must register for the binary name. Render into memory
+    // first: clap_complete panics on write errors, so piping into `head`
+    // would crash with BrokenPipe instead of exiting quietly.
+    let mut script = Vec::new();
+    clap_complete::generate(shell, &mut command, "rise", &mut script);
+    match std::io::stdout().write_all(&script) {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
+        Err(err) => Err(Error::Io(err)),
+    }
 }
 
 /// The rise banner: crab, name, tagline.

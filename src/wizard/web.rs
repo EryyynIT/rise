@@ -121,7 +121,8 @@ fn prompt_backend(backend: Backend) -> Result<BackendSpec> {
     let database = select("Select a database", Database::iter().collect())?;
     let deployment = select("Select a deployment option", Deployment::iter().collect())?;
     let testing = multi_select("Select testing options", Testing::iter().collect())?;
-    let features = multi_select("Select features", Feature::iter().collect())?;
+    let features = multi_select("Select features", implemented_features())?;
+    validate_features(&features)?;
     Ok(BackendSpec {
         backend,
         database,
@@ -147,8 +148,9 @@ fn complete_backend(
         multi_select("Select testing options", Testing::iter().collect())
     })?;
     let features = fill_multi(draft.features, mode, || {
-        multi_select("Select features", Feature::iter().collect())
+        multi_select("Select features", implemented_features())
     })?;
+    validate_features(&features)?;
     Ok(BackendSpec {
         backend,
         database,
@@ -156,6 +158,35 @@ fn complete_backend(
         testing,
         features,
     })
+}
+
+/// The features the templates actually render. The rest of the
+/// [`Feature`] enum is the roadmap: prompts offer only implemented ones,
+/// and flag-passed values outside this list are rejected up front instead
+/// of being silently ignored.
+fn implemented_features() -> Vec<Feature> {
+    vec![Feature::WebSockets]
+}
+
+/// Reject features with no template content yet, naming them by their
+/// CLI spellings.
+fn validate_features(features: &[Feature]) -> Result<()> {
+    use clap::ValueEnum;
+    let unimplemented = features
+        .iter()
+        .filter(|feature| !implemented_features().contains(feature))
+        .map(|feature| {
+            feature
+                .to_possible_value()
+                .expect("feature values are never hidden")
+                .get_name()
+                .to_owned()
+        })
+        .collect::<Vec<_>>();
+    if unimplemented.is_empty() {
+        return Ok(());
+    }
+    Err(Error::FeaturesNotAvailable(unimplemented.join(", ")))
 }
 
 /// Take the flag value, ask for it, or report it missing.
@@ -246,5 +277,26 @@ mod tests {
         let values = fill_multi::<Testing>(None, Interaction::NonInteractive, || unreachable!())
             .expect("empty by default");
         assert!(values.is_empty());
+    }
+
+    #[test]
+    fn unimplemented_features_are_rejected_by_name() {
+        let err = validate_features(&[Feature::WebSockets, Feature::gRPC, Feature::GraphQL])
+            .expect_err("grpc and graph-ql have no template content yet");
+        let Error::FeaturesNotAvailable(names) = err else {
+            panic!("expected FeaturesNotAvailable");
+        };
+        assert_eq!(names, "grpc, graph-ql");
+    }
+
+    #[test]
+    fn implemented_features_pass_validation() {
+        validate_features(&[Feature::WebSockets]).expect("web-sockets is implemented");
+        validate_features(&[]).expect("no features is fine");
+    }
+
+    #[test]
+    fn prompts_offer_only_implemented_features() {
+        assert_eq!(implemented_features(), vec![Feature::WebSockets]);
     }
 }

@@ -39,6 +39,10 @@ pub enum Error {
     #[error("template `{0}` is not available yet")]
     TemplateNotFound(String),
 
+    /// One or more selected features have no template content yet.
+    #[error("features not available yet: {0}")]
+    FeaturesNotAvailable(String),
+
     /// A template directory on disk (`--template`) could not be read.
     #[error("cannot read template directory `{path}`: {source}")]
     TemplateDirUnreadable {

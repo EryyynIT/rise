@@ -1,0 +1,56 @@
+#[cfg(feature = "ssr")]
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    use actix_files::Files;
+    use actix_web::{App, HttpServer};
+    use leptos::config::get_configuration;
+    use leptos::prelude::*;
+    use leptos_actix::{LeptosRoutes, generate_route_list};
+    use leptos_meta::MetaTags;
+    use {{ crate_ident }}::app::*;
+
+    let conf = get_configuration(None).expect("failed to load leptos configuration");
+    let addr = conf.leptos_options.site_addr;
+
+    HttpServer::new(move || {
+        // Generate the list of routes in your Leptos app.
+        let routes = generate_route_list(App);
+        let leptos_options = &conf.leptos_options;
+        let site_root = leptos_options.site_root.to_string();
+
+        println!("listening on http://{}", &addr);
+
+        App::new()
+            // Serve the compiled JS/WASM/CSS bundle.
+            .service(Files::new("/pkg", format!("{site_root}/pkg")))
+            .leptos_routes(routes, {
+                let leptos_options = leptos_options.clone();
+                move || {
+                    view! {
+                        <!DOCTYPE html>
+                        <html lang="en">
+                            <head>
+                                <meta charset="utf-8"/>
+                                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                                <AutoReload options=leptos_options.clone() />
+                                <HydrationScripts options=leptos_options.clone()/>
+                                <MetaTags/>
+                            </head>
+                            <body>
+                                <App/>
+                            </body>
+                        </html>
+                    }
+                }
+            })
+            .app_data(actix_web::web::Data::new(leptos_options.to_owned()))
+    })
+    .bind(&addr)?
+    .run()
+    .await
+}
+
+#[cfg(not(feature = "ssr"))]
+pub fn main() {
+    // No client-side main: the browser entry point is `hydrate` in lib.rs.
+}

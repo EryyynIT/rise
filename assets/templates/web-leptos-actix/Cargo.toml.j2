@@ -1,0 +1,59 @@
+[package]
+name = "{{ crate_name }}"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+actix-files = { version = "0.6", optional = true }
+actix-web = { version = "4", features = ["macros"], optional = true }
+leptos = { version = "0.8" }
+leptos_meta = { version = "0.8" }
+leptos_actix = { version = "0.8", optional = true }
+leptos_router = { version = "0.8" }
+console_error_panic_hook = { version = "0.1", optional = true }
+wasm-bindgen = { version = "0.2", optional = true }
+
+[features]
+hydrate = ["leptos/hydrate", "dep:console_error_panic_hook", "dep:wasm-bindgen"]
+ssr = [
+    "dep:actix-files",
+    "dep:actix-web",
+    "dep:leptos_actix",
+    "leptos/ssr",
+    "leptos_meta/ssr",
+    "leptos_router/ssr",
+]
+
+# Size-optimized profile for the WASM bundle in release mode.
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+
+# cargo-leptos reads this section; every key can be overridden by a
+# LEPTOS_* environment variable (see the Dockerfile).
+[package.metadata.leptos]
+# Name of the JS/WASM/CSS bundle. Defaults to the crate name.
+output-name = "{{ crate_name }}"
+# All cargo-leptos output lands here; the server reads files from it.
+site-root = "target/site"
+# The site-root-relative folder the compiled JS/WASM/CSS is written to.
+site-pkg-dir = "pkg"
+# Plain CSS (a .scss file would be compiled with dart-sass instead).
+style-file = "style/main.css"
+# Address the server binds to.
+site-addr = "127.0.0.1:3000"
+# WebSocket port for automatic reload in DEV.
+reload-port = 3001
+env = "DEV"
+# The binary is built for the server, the library for the browser.
+bin-features = ["ssr"]
+bin-default-features = false
+lib-features = ["hydrate"]
+lib-default-features = false
+lib-profile-release = "wasm-release"

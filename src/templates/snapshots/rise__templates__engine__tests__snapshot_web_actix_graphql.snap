@@ -17,6 +17,8 @@ edition = "2024"
 
 [dependencies]
 actix-web = "4"
+# Loads .env (DATABASE_URL & co.) into the environment at startup.
+dotenvy = "0.15"
 async-graphql = "7"
 async-graphql-actix-web = "7"
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }
@@ -91,6 +93,8 @@ async fn graphql(schema: web::Data<AppSchema>, request: GraphQLRequest) -> Graph
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    // Loads .env when present (DATABASE_URL & co.); absent is fine.
+    let _ = dotenvy::dotenv();
     let pool = db::create_pool().await.expect("failed to connect to database");
     let schema = Schema::build(QueryRoot, EmptyMutation, EmptySubscription).finish();
     println!("listening on http://localhost:3000");

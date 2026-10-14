@@ -17,6 +17,8 @@ edition = "2024"
 
 [dependencies]
 actix-web = "4"
+# Loads .env (DATABASE_URL & co.) into the environment at startup.
+dotenvy = "0.15"
 sea-orm = { version = "1", features = ["sqlx-postgres", "runtime-tokio-rustls"] }
 
 === Dockerfile ===
@@ -57,6 +59,8 @@ async fn root() -> impl Responder {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    // Loads .env when present (DATABASE_URL & co.); absent is fine.
+    let _ = dotenvy::dotenv();
     let conn = db::connect().await.expect("failed to connect to database");
     println!("listening on http://localhost:3000");
     HttpServer::new(move || {

@@ -5,6 +5,8 @@ edition = "2024"
 
 [dependencies]
 actix-web = "4"
+# Loads .env (DATABASE_URL & co.) into the environment at startup.
+dotenvy = "0.15"
 {%- if frontend == 'yew' %}
 actix-files = "0.6"
 {%- endif %}

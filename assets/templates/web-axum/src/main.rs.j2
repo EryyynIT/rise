@@ -44,6 +44,8 @@ mod db;
 
 #[tokio::main]
 async fn main() {
+    // Loads .env when present (DATABASE_URL & co.); absent is fine.
+    let _ = dotenvy::dotenv();
 {%- if frontend == 'yew' %}
     let app = Router::new().route("/api/hello", get(hello));
 {%- else %}

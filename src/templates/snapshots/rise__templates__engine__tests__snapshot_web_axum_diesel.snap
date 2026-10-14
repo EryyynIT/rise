@@ -18,6 +18,8 @@ edition = "2024"
 [dependencies]
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
+# Loads .env (DATABASE_URL & co.) into the environment at startup.
+dotenvy = "0.15"
 diesel = { version = "2", features = ["postgres", "r2d2"] }
 
 === src/db.rs ===
@@ -53,6 +55,8 @@ mod db;
 
 #[tokio::main]
 async fn main() {
+    // Loads .env when present (DATABASE_URL & co.); absent is fine.
+    let _ = dotenvy::dotenv();
     let app = Router::new().route("/", get(root));
     let db = db::create_pool();
     let app = app.with_state(db);

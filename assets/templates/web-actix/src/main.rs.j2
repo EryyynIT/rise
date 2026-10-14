@@ -197,6 +197,8 @@ async fn ws(
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    // Loads .env when present (DATABASE_URL & co.); absent is fine.
+    let _ = dotenvy::dotenv();
 {%- if backend.database == 'sqlx' %}
     let pool = db::create_pool().await.expect("failed to connect to database");
 {%- elif backend.database == 'sea-orm' %}

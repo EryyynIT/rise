@@ -17,6 +17,8 @@ edition = "2024"
 
 [dependencies]
 actix-web = "4"
+# Loads .env (DATABASE_URL & co.) into the environment at startup.
+dotenvy = "0.15"
 actix-governor = "0.10"
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }
 
@@ -62,6 +64,8 @@ async fn root() -> impl Responder {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    // Loads .env when present (DATABASE_URL & co.); absent is fine.
+    let _ = dotenvy::dotenv();
     let pool = db::create_pool().await.expect("failed to connect to database");
     // Rate limit requests per client IP: bursts of up to 5 requests,
     // then two requests per second on average.

@@ -5,6 +5,25 @@ use axum::{
     response::Response,
 };
 {%- endif %}
+{%- if frontend %}
+use axum::{
+    http::StatusCode,
+    response::Html,
+};
+{%- endif %}
+{%- if frontend == 'askama' %}
+use askama::Template;
+{%- elif frontend == 'tera' %}
+use std::sync::LazyLock;
+use tera::{Context, Tera};
+{%- elif frontend == 'minijinja' %}
+use minijinja::{Environment, context};
+use std::sync::LazyLock;
+{%- elif frontend == 'handlebars' %}
+use handlebars::Handlebars;
+use serde_json::json;
+use std::sync::LazyLock;
+{%- endif %}
 {%- if backend.database == 'sqlx' %}
 
 mod db;
@@ -28,10 +47,98 @@ async fn main() {
     println!("listening on http://localhost:3000");
     axum::serve(listener, app).await.expect("server error");
 }
+{%- if frontend == 'askama' %}
+
+/// Home page: rendered from `templates/index.html` at compile time.
+#[derive(Template)]
+#[template(path = "index.html")]
+struct IndexTemplate {
+    name: String,
+}
+
+async fn root() -> Result<Html<String>, (StatusCode, String)> {
+    let template = IndexTemplate {
+        name: "{{ name }}".to_owned(),
+    };
+    template.render().map(Html).map_err(internal_error)
+}
+
+fn internal_error(err: impl std::fmt::Display) -> (StatusCode, String) {
+    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+}
+{%- elif frontend == 'tera' %}
+
+/// Templates are embedded into the binary, so the app runs from any
+/// working directory (including the slim Docker image).
+static TEMPLATES: LazyLock<Tera> = LazyLock::new(|| {
+    let mut tera = Tera::default();
+    tera.add_raw_template("index.html", include_str!("../templates/index.html"))
+        .expect("failed to compile template");
+    tera
+});
+
+async fn root() -> Result<Html<String>, (StatusCode, String)> {
+    let mut context = Context::new();
+    context.insert("name", "{{ name }}");
+    TEMPLATES
+        .render("index.html", &context)
+        .map(Html)
+        .map_err(internal_error)
+}
+
+fn internal_error(err: impl std::fmt::Display) -> (StatusCode, String) {
+    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+}
+{%- elif frontend == 'minijinja' %}
+
+/// Templates are embedded into the binary, so the app runs from any
+/// working directory (including the slim Docker image).
+static TEMPLATES: LazyLock<Environment<'static>> = LazyLock::new(|| {
+    let mut env = Environment::new();
+    env.add_template("index.html", include_str!("../templates/index.html"))
+        .expect("failed to compile template");
+    env
+});
+
+async fn root() -> Result<Html<String>, (StatusCode, String)> {
+    let template = TEMPLATES.get_template("index.html").map_err(internal_error)?;
+    template
+        .render(context! { name => "{{ name }}" })
+        .map(Html)
+        .map_err(internal_error)
+}
+
+fn internal_error(err: impl std::fmt::Display) -> (StatusCode, String) {
+    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+}
+{%- elif frontend == 'handlebars' %}
+
+/// Templates are embedded into the binary, so the app runs from any
+/// working directory (including the slim Docker image).
+static TEMPLATES: LazyLock<Handlebars<'static>> = LazyLock::new(|| {
+    let mut handlebars = Handlebars::new();
+    handlebars
+        .register_template_string("index", include_str!("../templates/index.hbs"))
+        .expect("failed to compile template");
+    handlebars
+});
+
+async fn root() -> Result<Html<String>, (StatusCode, String)> {
+    TEMPLATES
+        .render("index", &json!({ "name": "{{ name }}" }))
+        .map(Html)
+        .map_err(internal_error)
+}
+
+fn internal_error(err: impl std::fmt::Display) -> (StatusCode, String) {
+    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+}
+{%- else %}
 
 async fn root() -> &'static str {
     "Hello from {{ name }}!"
 }
+{%- endif %}
 {%- if 'web-sockets' in backend.features %}
 
 /// WebSocket echo endpoint: sends every text message back.

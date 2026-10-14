@@ -1,8 +1,8 @@
 use actix_web::{App, HttpServer, Responder, get};
-{%- if 'web-sockets' in spec.WebApp.Backend.features %}
+{%- if 'web-sockets' in backend.features %}
 use actix_web::{HttpRequest, HttpResponse};
 {%- endif %}
-{%- if spec.WebApp.Backend.database == 'sqlx' %}
+{%- if backend.database == 'sqlx' %}
 
 mod db;
 {%- endif %}
@@ -11,7 +11,7 @@ mod db;
 async fn root() -> impl Responder {
     "Hello from {{ name }}!"
 }
-{%- if 'web-sockets' in spec.WebApp.Backend.features %}
+{%- if 'web-sockets' in backend.features %}
 
 /// WebSocket echo endpoint: sends every text message back.
 #[get("/ws")]
@@ -33,16 +33,16 @@ async fn ws(
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-{%- if spec.WebApp.Backend.database == 'sqlx' %}
+{%- if backend.database == 'sqlx' %}
     let pool = db::create_pool().await.expect("failed to connect to database");
 {%- endif %}
     println!("listening on http://localhost:3000");
     HttpServer::new(move || {
         let app = App::new().service(root);
-{%- if 'web-sockets' in spec.WebApp.Backend.features %}
+{%- if 'web-sockets' in backend.features %}
         let app = app.service(ws);
 {%- endif %}
-{%- if spec.WebApp.Backend.database == 'sqlx' %}
+{%- if backend.database == 'sqlx' %}
         app.app_data(actix_web::web::Data::new(pool.clone()))
 {%- else %}
         app
@@ -52,7 +52,7 @@ async fn main() -> std::io::Result<()> {
     .run()
     .await
 }
-{%- if 'api' in spec.WebApp.Backend.testing %}
+{%- if 'api' in backend.testing %}
 
 #[cfg(test)]
 mod tests {
@@ -68,7 +68,7 @@ mod tests {
     }
 }
 {%- endif %}
-{%- if 'sqlx' in spec.WebApp.Backend.testing and spec.WebApp.Backend.database == 'sqlx' %}
+{%- if 'sqlx' in backend.testing and backend.database == 'sqlx' %}
 
 #[cfg(test)]
 mod db_tests {

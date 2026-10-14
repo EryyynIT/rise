@@ -20,10 +20,8 @@ use handlebars::Handlebars;
 use serde_json::json;
 use std::sync::LazyLock;
 {%- endif %}
-{%- if backend.database != 'sled' %}
 
 mod db;
-{%- endif %}
 {%- if frontend == 'askama' %}
 
 /// Home page: rendered from `templates/index.html` at compile time.
@@ -169,6 +167,8 @@ async fn main() -> std::io::Result<()> {
     let conn = db::connect().await.expect("failed to connect to database");
 {%- elif backend.database == 'diesel' %}
     let pool = db::create_pool();
+{%- elif backend.database == 'sled' %}
+    let store = db::open().expect("failed to open the database");
 {%- endif %}
     println!("listening on http://localhost:3000");
     HttpServer::new(move || {
@@ -186,6 +186,8 @@ async fn main() -> std::io::Result<()> {
         app.app_data(actix_web::web::Data::new(conn.clone()))
 {%- elif backend.database == 'diesel' %}
         app.app_data(actix_web::web::Data::new(pool.clone()))
+{%- elif backend.database == 'sled' %}
+        app.app_data(actix_web::web::Data::new(store.clone()))
 {%- else %}
         app
 {%- endif %}

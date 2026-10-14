@@ -54,4 +54,15 @@ pub fn create_pool() -> DbPool {
         .build(manager)
         .expect("failed to build the database pool")
 }
+{%- elif backend.database == 'sled' -%}
+//! Embedded key-value storage (sled).
+
+use sled::Db;
+
+/// Open the embedded database at `DB_PATH` (defaults to a local `data/`
+/// directory, created on first run).
+pub fn open() -> Result<Db, sled::Error> {
+    let path = std::env::var("DB_PATH").unwrap_or_else(|_| "data".to_owned());
+    sled::open(path)
+}
 {%- endif %}

@@ -90,7 +90,10 @@ fn new_with_diesel_wires_a_connection_pool() {
     assert!(cargo_toml.contains("r2d2"));
     assert!(!cargo_toml.contains("sqlx"));
     assert!(project.join("src/db.rs").exists(), "pool module");
-    assert!(project.join(".env.example").exists(), "DATABASE_URL example");
+    assert!(
+        project.join(".env.example").exists(),
+        "DATABASE_URL example"
+    );
     let main_rs = std::fs::read_to_string(project.join("src/main.rs")).expect("read main.rs");
     assert!(main_rs.contains("db::create_pool()"));
 }

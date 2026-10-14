@@ -783,6 +783,29 @@ mod tests {
     }
 
     #[test]
+    fn sled_opens_an_embedded_store() {
+        let spec = ProjectSpec::WebApp(WebAppSpec::Backend(BackendSpec {
+            backend: Backend::Axum,
+            database: Database::Sled,
+            deployment: Deployment::SelfHosted,
+            testing: vec![],
+            features: vec![],
+        }));
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("web-axum").expect("template");
+
+        render_test(&template, &spec, "app", tmp.path()).expect("render");
+
+        assert!(tmp.path().join("src/db.rs").exists());
+        let env_example = fs::read_to_string(tmp.path().join(".env.example")).expect("read");
+        assert!(env_example.contains("DB_PATH"));
+        let gitignore = fs::read_to_string(tmp.path().join(".gitignore")).expect("read");
+        assert!(gitignore.contains("/data"));
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("db::open()"));
+    }
+
+    #[test]
     fn actix_sqlx_shares_the_pool_via_app_data() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let template = Template::embedded("web-actix").expect("template");
@@ -1077,6 +1100,28 @@ mod tests {
             Backend::Actix,
             Database::Diesel,
             Deployment::Docker,
+            vec![],
+            vec![],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_axum_sled() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Axum,
+            Database::Sled,
+            Deployment::SelfHosted,
+            vec![],
+            vec![],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_sled() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Actix,
+            Database::Sled,
+            Deployment::SelfHosted,
             vec![],
             vec![],
         )));

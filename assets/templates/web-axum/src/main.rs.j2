@@ -27,10 +27,8 @@ use handlebars::Handlebars;
 use serde_json::json;
 use std::sync::LazyLock;
 {%- endif %}
-{%- if backend.database != 'sled' %}
 
 mod db;
-{%- endif %}
 
 #[tokio::main]
 async fn main() {
@@ -51,6 +49,9 @@ async fn main() {
 {%- elif backend.database == 'diesel' %}
     let pool = db::create_pool();
     let app = app.with_state(pool);
+{%- elif backend.database == 'sled' %}
+    let store = db::open().expect("failed to open the database");
+    let app = app.with_state(store);
 {%- endif %}
 {%- if frontend == 'yew' %}
     // Serve the WASM bundle built by trunk (`frontend/dist`) next to the API.

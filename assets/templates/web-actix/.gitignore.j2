@@ -1,4 +1,5 @@
 /target
-{%- if backend.database != 'sled' %}
 .env
+{%- if backend.database == 'sled' %}
+/data
 {%- endif %}

@@ -1,5 +1,6 @@
 /target
 **/dist
-{%- if backend and backend.database != 'sled' %}
 .env
+{%- if backend and backend.database == 'sled' %}
+/data
 {%- endif %}

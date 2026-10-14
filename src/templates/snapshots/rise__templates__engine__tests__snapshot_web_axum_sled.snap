@@ -1,0 +1,57 @@
+---
+source: src/templates/engine.rs
+expression: "snapshot_output(&backend_spec_full(Backend::Axum, Database::Sled,\nDeployment::SelfHosted, vec![], vec![],))"
+---
+=== .env.example ===
+DB_PATH=data
+
+=== .gitignore ===
+/target
+.env
+/data
+
+=== Cargo.toml ===
+[package]
+name = "sample-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+sled = "0.34"
+
+=== src/db.rs ===
+//! Embedded key-value storage (sled).
+
+use sled::Db;
+
+/// Open the embedded database at `DB_PATH` (defaults to a local `data/`
+/// directory, created on first run).
+pub fn open() -> Result<Db, sled::Error> {
+    let path = std::env::var("DB_PATH").unwrap_or_else(|_| "data".to_owned());
+    sled::open(path)
+}
+
+=== src/main.rs ===
+use axum::{Router, routing::get};
+
+mod db;
+
+#[tokio::main]
+async fn main() {
+    let app = Router::new().route("/", get(root));
+    let store = db::open().expect("failed to open the database");
+    let app = app.with_state(store);
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
+        .await
+        .expect("failed to bind port 3000");
+
+    println!("listening on http://localhost:3000");
+    axum::serve(listener, app).await.expect("server error");
+}
+
+async fn root() -> &'static str {
+    "Hello from sample-app!"
+}

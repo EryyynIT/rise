@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Generated Axum/Actix backends load `.env` at startup (via `dotenvy`), so
+  the `cp .env.example .env` next step rise prints is now sufficient to run
+  the app — previously nothing read the file and the app panicked on the
+  missing `DATABASE_URL`.
+- Every Docker template ships a `.dockerignore` (`target/`, `.git`, `.env`,
+  `dist/`), keeping local build artifacts and secrets out of the image
+  build context.
+- Two integration tests pin the crash-only guarantee: a failed generation
+  removes the half-written project directory, and an existing *empty*
+  target directory is accepted.
+
+### Changed
+
+- Project names that are Rust keywords (`loop`, `fn`, `Self`, `gen`, ...)
+  are rejected up front. Cargo accepts some of them as package names, but
+  crates.io refuses them and generated use-statements (`use loop::...`)
+  do not parse.
+- The wizard no longer offers Leptos for a frontend-only web app; that
+  combination has no template yet and used to fail at generation after
+  the full question flow.
+- `--template` directories render in sorted path order instead of
+  filesystem iteration order, matching the deterministic embedded
+  templates.
+
+### Fixed
+
+- `rise list` (and the banner/next-steps output) no longer panics with
+  exit code 101 when stdout closes early (`rise list | head -1`).
+
 ## [0.5.0] - 2026-10-14
 
 ### Added

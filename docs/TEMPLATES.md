@@ -88,6 +88,8 @@ doesn't have that stack (`{% if backend %}...{% endif %}`).
   half-written projects.
 - Template paths that would escape the target directory (`../`, absolute)
   are rejected.
+- Files render in sorted path order (a `--template` directory is sorted on
+  load; embedded templates are ordered at compile time).
 
 ## Composition
 

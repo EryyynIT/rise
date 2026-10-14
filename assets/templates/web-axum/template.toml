@@ -5,6 +5,6 @@ description = "Backend on Axum + tokio"
 # (`.j2` already stripped); when the expression — evaluated against the
 # render context — is true, the file is skipped.
 [files.exclude_if]
-Dockerfile = "spec.WebApp.Backend.deployment != 'docker'"
-"src/db.rs" = "spec.WebApp.Backend.database != 'sqlx'"
-".env.example" = "spec.WebApp.Backend.database != 'sqlx'"
+Dockerfile = "backend.deployment != 'docker'"
+"src/db.rs" = "backend.database != 'sqlx'"
+".env.example" = "backend.database != 'sqlx'"

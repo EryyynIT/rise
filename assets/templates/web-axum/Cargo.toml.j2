@@ -4,28 +4,28 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-{%- if 'web-sockets' in spec.WebApp.Backend.features %}
+{%- if 'web-sockets' in backend.features %}
 axum = { version = "0.8", features = ["ws"] }
 {%- else %}
 axum = "0.8"
 {%- endif %}
 tokio = { version = "1", features = ["full"] }
-{%- if spec.WebApp.Backend.database == 'sqlx' %}
+{%- if backend.database == 'sqlx' %}
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }
-{%- elif spec.WebApp.Backend.database == 'diesel' %}
+{%- elif backend.database == 'diesel' %}
 diesel = { version = "2", features = ["postgres"] }
-{%- elif spec.WebApp.Backend.database == 'sea-orm' %}
+{%- elif backend.database == 'sea-orm' %}
 sea-orm = { version = "1", features = ["sqlx-postgres", "runtime-tokio-rustls"] }
-{%- elif spec.WebApp.Backend.database == 'sled' %}
+{%- elif backend.database == 'sled' %}
 sled = "0.34"
 {%- endif %}
-{%- if 'api' in spec.WebApp.Backend.testing or 'mock' in spec.WebApp.Backend.testing %}
+{%- if 'api' in backend.testing or 'mock' in backend.testing %}
 
 [dev-dependencies]
-{%- if 'api' in spec.WebApp.Backend.testing %}
+{%- if 'api' in backend.testing %}
 tower = "0.5"
 {%- endif %}
-{%- if 'mock' in spec.WebApp.Backend.testing %}
+{%- if 'mock' in backend.testing %}
 mockall = "0.13"
 {%- endif %}
 {%- endif %}

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-14
+
 ### Added
 
 - `rise completions <shell>` prints a shell completion script for bash,
@@ -15,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   disk instead of the embedded one for the selected stack; the spec is
   still collected as usual and forms the render context. Unreadable
   template directories report the offending path.
+- Usage reference in the README and a template authoring guide in
+  `docs/TEMPLATES.md`.
+
+### Changed
+
+- `--features grpc`, `graph-ql` and `rate-limiting` are rejected up front
+  ("features not available yet") instead of being silently ignored; only
+  `web-sockets` has template content so far. Interactive prompts offer
+  only implemented features.
 
 ## [0.2.0] - 2026-10-14
 

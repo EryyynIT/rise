@@ -14,6 +14,27 @@ use crate::name::ProjectName;
 use crate::spec::{Backend, BackendSpec, Frontend, ProjectSpec, WebAppSpec};
 use crate::templates::template::{RENDER_SUFFIX, Template, TemplateFile};
 
+/// Where to load the template from.
+#[derive(Debug, Default)]
+pub(crate) enum TemplateSource {
+    /// The embedded template implementing the spec's stack.
+    #[default]
+    Embedded,
+    /// A template directory on disk, used instead of the embedded one
+    /// (`--template`). The spec is still collected as usual and forms the
+    /// render context.
+    Dir(PathBuf),
+}
+
+impl TemplateSource {
+    fn load(&self, spec: &ProjectSpec) -> Result<Template> {
+        match self {
+            Self::Embedded => Template::embedded(template_id(spec)?),
+            Self::Dir(path) => Template::from_dir(path),
+        }
+    }
+}
+
 /// Generate a project from a complete spec into `./<name>/`.
 ///
 /// The target directory is created; if it already exists it must be empty.
@@ -23,11 +44,16 @@ use crate::templates::template::{RENDER_SUFFIX, Template, TemplateFile};
 /// # Errors
 ///
 /// [`Error::TemplateNotFound`] if the spec's stack has no template yet,
-/// [`Error::TargetNotEmpty`] if `./<name>/` exists and is not empty, and
-/// [`Error::Manifest`]/[`Error::Render`]/[`Error::Io`] for template and
+/// [`Error::TemplateDirUnreadable`] if a `--template` directory cannot be
+/// read, [`Error::TargetNotEmpty`] if `./<name>/` exists and is not empty,
+/// and [`Error::Manifest`]/[`Error::Render`]/[`Error::Io`] for template and
 /// filesystem failures.
-pub(crate) fn generate(spec: &ProjectSpec, name: &ProjectName) -> Result<PathBuf> {
-    let template = Template::embedded(template_id(spec)?)?;
+pub(crate) fn generate(
+    spec: &ProjectSpec,
+    name: &ProjectName,
+    source: &TemplateSource,
+) -> Result<PathBuf> {
+    let template = source.load(spec)?;
     let target = PathBuf::from(name.as_str());
     let target_existed = prepare_target(&target)?;
 
@@ -422,6 +448,38 @@ mod tests {
         assert!(lib_rs.contains("mathlib"));
         assert!(lib_rs.contains("#[cfg(test)]"));
         assert!(!tmp.path().join("src/main.rs").exists());
+    }
+
+    #[test]
+    fn dir_source_renders_the_custom_template() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template_dir = tmp.path().join("my-template");
+        fs::create_dir(&template_dir).expect("mkdir");
+        fs::write(
+            template_dir.join("template.toml"),
+            "name = \"custom\"\ndescription = \"test template\"",
+        )
+        .expect("write manifest");
+        fs::write(template_dir.join("README.md.j2"), "# {{ name }}").expect("write file");
+
+        let target_dir = tmp.path().join("out");
+        fs::create_dir(&target_dir).expect("mkdir");
+        let spec = ProjectSpec::CliApp;
+        let source = TemplateSource::Dir(template_dir);
+        let template = source.load(&spec).expect("load custom template");
+        render_into(&template, &spec, "custom-app", &target_dir).expect("render");
+
+        let readme = fs::read_to_string(target_dir.join("README.md")).expect("read output");
+        assert_eq!(readme, "# custom-app");
+    }
+
+    #[test]
+    fn embedded_source_maps_the_spec() {
+        let spec = ProjectSpec::Library;
+        let template = TemplateSource::Embedded
+            .load(&spec)
+            .expect("embedded template");
+        assert_eq!(template.manifest().name, "library");
     }
 
     #[test]

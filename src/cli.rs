@@ -1,6 +1,8 @@
 //! Command-line interface definition (clap). Argument description only;
 //! the interactive side lives in [`crate::wizard`].
 
+use std::path::PathBuf;
+
 use clap::{Args, Parser, Subcommand};
 
 use crate::name::ProjectName;
@@ -45,6 +47,11 @@ pub(crate) struct NewArgs {
 
     #[command(flatten)]
     pub(crate) web: WebFlags,
+
+    /// Load the template from this directory instead of the embedded one
+    /// for the selected stack.
+    #[arg(long, value_name = "DIR")]
+    pub(crate) template: Option<PathBuf>,
 
     /// Do not ask any questions; missing options become an error.
     #[arg(long)]

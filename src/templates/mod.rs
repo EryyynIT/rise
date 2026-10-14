@@ -7,5 +7,5 @@
 mod engine;
 mod template;
 
-pub(crate) use engine::generate;
+pub(crate) use engine::{TemplateSource, generate};
 pub(crate) use template::list_embedded;

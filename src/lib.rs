@@ -39,11 +39,15 @@ pub fn run(cli: Cli) -> Result<(), Error> {
 }
 
 /// The main mode: banner, wizard over the flag gaps, generation.
-fn run_new(args: NewArgs) -> Result<(), Error> {
+fn run_new(mut args: NewArgs) -> Result<(), Error> {
     print_banner();
 
+    let source = match args.template.take() {
+        Some(dir) => templates::TemplateSource::Dir(dir),
+        None => templates::TemplateSource::Embedded,
+    };
     let (name, spec) = wizard::collect(args)?;
-    let path = templates::generate(&spec, &name)?;
+    let path = templates::generate(&spec, &name, &source)?;
     init_git(&path);
 
     println!("created ./{}", path.display());

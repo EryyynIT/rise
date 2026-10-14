@@ -57,18 +57,24 @@ impl Template {
         Ok(Self { manifest, files })
     }
 
-    /// Load a template from a directory on disk.
+    /// Load a template from a directory on disk (`--template`).
     ///
     /// # Errors
     ///
-    /// [`Error::Io`] on read failures (including a missing manifest),
-    /// [`Error::Manifest`] on an invalid manifest.
-    #[allow(dead_code)] // exercised by tests; user-facing once `--template` lands
+    /// [`Error::TemplateDirUnreadable`] on read failures (including a
+    /// missing manifest), [`Error::Manifest`] on an invalid manifest.
     pub(crate) fn from_dir(root: &Path) -> Result<Self> {
-        let manifest = toml::from_str(&fs::read_to_string(root.join(MANIFEST_FILE))?)?;
+        // Name the directory in every I/O failure: a bare "no such file"
+        // leaves the user guessing which path `--template` was resolved to.
+        let unreadable = |source: std::io::Error| Error::TemplateDirUnreadable {
+            path: root.display().to_string(),
+            source,
+        };
+        let manifest =
+            toml::from_str(&fs::read_to_string(root.join(MANIFEST_FILE)).map_err(unreadable)?)?;
 
         let mut files = Vec::new();
-        collect_fs(root, Path::new(""), &mut files)?;
+        collect_fs(root, Path::new(""), &mut files).map_err(unreadable)?;
         files.retain(|f| f.path != MANIFEST_FILE);
 
         Ok(Self { manifest, files })
@@ -172,8 +178,9 @@ fn collect_embedded(dir: &Dir<'_>, prefix: &str, files: &mut Vec<TemplateFile>) 
     }
 }
 
-/// Collect files from disk recursively, building `/`-separated relative paths.
-fn collect_fs(root: &Path, rel: &Path, files: &mut Vec<TemplateFile>) -> Result<()> {
+/// Collect files from disk recursively, building `/`-separated relative
+/// paths. Returns a plain I/O result so callers can attach path context.
+fn collect_fs(root: &Path, rel: &Path, files: &mut Vec<TemplateFile>) -> std::io::Result<()> {
     for entry in fs::read_dir(root.join(rel))? {
         let entry = entry?;
         let entry_rel = rel.join(entry.file_name());
@@ -255,6 +262,16 @@ Dockerfile = "spec.WebApp.Backend.deployment != 'docker'"
         let manifests = list_embedded().expect("embedded manifests parse");
         let names: Vec<&str> = manifests.iter().map(|m| m.name.as_str()).collect();
         assert_eq!(names, ["cli", "library", "web-actix", "web-axum"]);
+    }
+
+    #[test]
+    fn unreadable_template_dir_names_the_path() {
+        let err = Template::from_dir(Path::new("/nonexistent/rise-template"))
+            .expect_err("missing dir must fail");
+        let Error::TemplateDirUnreadable { path, .. } = &err else {
+            panic!("expected TemplateDirUnreadable, got {err:?}");
+        };
+        assert!(path.contains("rise-template"));
     }
 
     #[test]

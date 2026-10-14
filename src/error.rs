@@ -39,6 +39,15 @@ pub enum Error {
     #[error("template `{0}` is not available yet")]
     TemplateNotFound(String),
 
+    /// A template directory on disk (`--template`) could not be read.
+    #[error("cannot read template directory `{path}`: {source}")]
+    TemplateDirUnreadable {
+        /// The directory the user pointed at.
+        path: String,
+        /// The underlying I/O failure.
+        source: std::io::Error,
+    },
+
     /// A template manifest (`template.toml`) failed to parse.
     #[error("invalid template manifest: {0}")]
     Manifest(#[from] toml::de::Error),

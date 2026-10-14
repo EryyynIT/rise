@@ -162,6 +162,132 @@ fn new_with_websockets_adds_ws_endpoint() {
 }
 
 #[test]
+fn new_with_sea_orm_wires_a_connection() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "seaorm-app",
+            "--backend",
+            "axum",
+            "--db",
+            "sea-orm",
+            "--deployment",
+            "docker",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let project = tmp.path().join("seaorm-app");
+    let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read Cargo.toml");
+    assert!(cargo_toml.contains("sea-orm"));
+    let db_rs = std::fs::read_to_string(project.join("src/db.rs")).expect("read db.rs");
+    assert!(db_rs.contains("Database::connect"));
+    let main_rs = std::fs::read_to_string(project.join("src/main.rs")).expect("read main.rs");
+    assert!(main_rs.contains("db::connect().await"));
+}
+
+#[test]
+fn new_with_sled_wires_an_embedded_store() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "sled-app",
+            "--backend",
+            "actix",
+            "--db",
+            "sled",
+            "--deployment",
+            "self-hosted",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let project = tmp.path().join("sled-app");
+    let db_rs = std::fs::read_to_string(project.join("src/db.rs")).expect("read db.rs");
+    assert!(db_rs.contains("sled::open"));
+    let env_example =
+        std::fs::read_to_string(project.join(".env.example")).expect("read .env.example");
+    assert!(env_example.contains("DB_PATH"));
+    let gitignore = std::fs::read_to_string(project.join(".gitignore")).expect("read .gitignore");
+    assert!(gitignore.contains("/data"));
+    let main_rs = std::fs::read_to_string(project.join("src/main.rs")).expect("read main.rs");
+    assert!(main_rs.contains("db::open()"));
+}
+
+#[test]
+fn new_with_rate_limiting_adds_governor() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "limited-app",
+            "--backend",
+            "axum",
+            "--db",
+            "sqlx",
+            "--deployment",
+            "docker",
+            "--features",
+            "rate-limiting",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let project = tmp.path().join("limited-app");
+    let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read Cargo.toml");
+    assert!(cargo_toml.contains("tower_governor"));
+    let main_rs = std::fs::read_to_string(project.join("src/main.rs")).expect("read main.rs");
+    assert!(main_rs.contains("GovernorLayer::new(governor_conf)"));
+    assert!(main_rs.contains("into_make_service_with_connect_info"));
+}
+
+#[test]
+fn new_with_graphql_adds_schema_and_graphiql() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "gql-app",
+            "--backend",
+            "actix",
+            "--db",
+            "sqlx",
+            "--deployment",
+            "docker",
+            "--features",
+            "graph-ql",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let project = tmp.path().join("gql-app");
+    let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read Cargo.toml");
+    assert!(cargo_toml.contains("async-graphql"));
+    let main_rs = std::fs::read_to_string(project.join("src/main.rs")).expect("read main.rs");
+    assert!(main_rs.contains("QueryRoot"));
+    assert!(main_rs.contains("GraphiQLSource"));
+    assert!(main_rs.contains("Data::new(schema.clone())"));
+}
+
+#[test]
 fn sqlx_testing_without_sqlx_database_is_rejected() {
     Command::cargo_bin("rise")
         .expect("binary")

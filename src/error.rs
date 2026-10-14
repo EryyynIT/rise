@@ -6,8 +6,8 @@ use thiserror::Error;
 /// Result alias for fallible `rise` operations.
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// Errors that can occur while collecting a [`crate::spec::ProjectSpec`]
-/// or scaffolding a project.
+/// Errors that can occur while collecting a `ProjectSpec` or scaffolding
+/// a project.
 #[derive(Debug, Error)]
 pub enum Error {
     /// The user aborted an interactive prompt (Esc or Ctrl+C).

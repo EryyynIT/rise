@@ -103,6 +103,22 @@ fn print_completions(shell: clap_complete::Shell) -> Result<(), Error> {
     // would crash with BrokenPipe instead of exiting quietly.
     let mut script = Vec::new();
     clap_complete::generate(shell, &mut command, "rise", &mut script);
+    // clap_complete's fish generator skips positional arguments, so
+    // `rise completions <TAB>` would fall back to file names; append the
+    // shell list ourselves (bash and zsh generators emit it natively).
+    if matches!(shell, clap_complete::Shell::Fish) {
+        use clap::ValueEnum;
+        let names = clap_complete::Shell::value_variants()
+            .iter()
+            .filter_map(|shell| shell.to_possible_value())
+            .map(|value| value.get_name().to_owned())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let line = format!(
+            "complete -c rise -n \"__fish_rise_using_subcommand completions\" -f -a \"{names}\" -d 'The shell to generate completions for'\n"
+        );
+        script.extend_from_slice(line.as_bytes());
+    }
     match std::io::stdout().write_all(&script) {
         Ok(()) => Ok(()),
         Err(err) if err.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),

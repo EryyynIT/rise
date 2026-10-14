@@ -387,6 +387,20 @@ fn completions_register_for_the_binary_name() {
 }
 
 #[test]
+fn fish_completions_cover_the_shell_argument() {
+    // clap_complete's fish generator skips positional arguments; we append
+    // the shell names for `rise completions <shell>` ourselves.
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args(["completions", "fish"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "complete -c rise -n \"__fish_rise_using_subcommand completions\" -f -a \"bash elvish fish powershell zsh\"",
+        ));
+}
+
+#[test]
 fn conflicting_flags_are_rejected_before_prompts() {
     Command::cargo_bin("rise")
         .expect("binary")

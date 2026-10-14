@@ -1,5 +1,5 @@
 name = "web-actix"
-description = "Backend on Actix Web"
+description = "Actix Web backend, optionally with a server-side template engine"
 
 # File conditionality lives here, not in Rust code. Keys are OUTPUT paths
 # (`.j2` already stripped); when the expression — evaluated against the
@@ -8,3 +8,6 @@ description = "Backend on Actix Web"
 Dockerfile = "backend.deployment != 'docker'"
 "src/db.rs" = "backend.database != 'sqlx'"
 ".env.example" = "backend.database != 'sqlx'"
+# Handlebars uses its own .hbs file; the other engines share index.html.
+"templates/index.html" = "frontend is none or frontend == 'handlebars'"
+"templates/index.hbs" = "frontend is none or frontend != 'handlebars'"

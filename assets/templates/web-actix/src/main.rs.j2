@@ -1,16 +1,136 @@
 use actix_web::{App, HttpServer, Responder, get};
 {%- if 'web-sockets' in backend.features %}
 use actix_web::{HttpRequest, HttpResponse};
+{%- elif frontend %}
+use actix_web::HttpResponse;
+{%- endif %}
+{%- if frontend == 'askama' %}
+use askama::Template;
+{%- elif frontend == 'tera' %}
+use std::sync::LazyLock;
+use tera::{Context, Tera};
+{%- elif frontend == 'minijinja' %}
+use minijinja::{Environment, context};
+use std::sync::LazyLock;
+{%- elif frontend == 'handlebars' %}
+use handlebars::Handlebars;
+use serde_json::json;
+use std::sync::LazyLock;
 {%- endif %}
 {%- if backend.database == 'sqlx' %}
 
 mod db;
 {%- endif %}
+{%- if frontend == 'askama' %}
+
+/// Home page: rendered from `templates/index.html` at compile time.
+#[derive(Template)]
+#[template(path = "index.html")]
+struct IndexTemplate {
+    name: String,
+}
+
+#[get("/")]
+async fn root() -> impl Responder {
+    let template = IndexTemplate {
+        name: "{{ name }}".to_owned(),
+    };
+    render_response(template.render())
+}
+
+fn render_response(result: Result<String, impl std::fmt::Display>) -> HttpResponse {
+    match result {
+        Ok(html) => HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .body(html),
+        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+    }
+}
+{%- elif frontend == 'tera' %}
+
+/// Templates are embedded into the binary, so the app runs from any
+/// working directory (including the slim Docker image).
+static TEMPLATES: LazyLock<Tera> = LazyLock::new(|| {
+    let mut tera = Tera::default();
+    tera.add_raw_template("index.html", include_str!("../templates/index.html"))
+        .expect("failed to compile template");
+    tera
+});
+
+#[get("/")]
+async fn root() -> impl Responder {
+    let mut context = Context::new();
+    context.insert("name", "{{ name }}");
+    render_response(TEMPLATES.render("index.html", &context))
+}
+
+fn render_response(result: Result<String, impl std::fmt::Display>) -> HttpResponse {
+    match result {
+        Ok(html) => HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .body(html),
+        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+    }
+}
+{%- elif frontend == 'minijinja' %}
+
+/// Templates are embedded into the binary, so the app runs from any
+/// working directory (including the slim Docker image).
+static TEMPLATES: LazyLock<Environment<'static>> = LazyLock::new(|| {
+    let mut env = Environment::new();
+    env.add_template("index.html", include_str!("../templates/index.html"))
+        .expect("failed to compile template");
+    env
+});
+
+#[get("/")]
+async fn root() -> impl Responder {
+    let result = TEMPLATES
+        .get_template("index.html")
+        .and_then(|template| template.render(context! { name => "{{ name }}" }));
+    render_response(result)
+}
+
+fn render_response(result: Result<String, impl std::fmt::Display>) -> HttpResponse {
+    match result {
+        Ok(html) => HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .body(html),
+        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+    }
+}
+{%- elif frontend == 'handlebars' %}
+
+/// Templates are embedded into the binary, so the app runs from any
+/// working directory (including the slim Docker image).
+static TEMPLATES: LazyLock<Handlebars<'static>> = LazyLock::new(|| {
+    let mut handlebars = Handlebars::new();
+    handlebars
+        .register_template_string("index", include_str!("../templates/index.hbs"))
+        .expect("failed to compile template");
+    handlebars
+});
+
+#[get("/")]
+async fn root() -> impl Responder {
+    render_response(TEMPLATES.render("index", &json!({ "name": "{{ name }}" })))
+}
+
+fn render_response(result: Result<String, impl std::fmt::Display>) -> HttpResponse {
+    match result {
+        Ok(html) => HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .body(html),
+        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+    }
+}
+{%- else %}
 
 #[get("/")]
 async fn root() -> impl Responder {
     "Hello from {{ name }}!"
 }
+{%- endif %}
 {%- if 'web-sockets' in backend.features %}
 
 /// WebSocket echo endpoint: sends every text message back.

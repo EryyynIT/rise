@@ -52,7 +52,7 @@ Everything the wizard asks is also a flag on `rise new`:
 | `NAME` | a valid crate name | positional; asked first when omitted |
 | `--kind` | `web`, `cli`, `library` | inferred as `web` when any web flag is passed |
 | `--backend` | `axum`, `actix` | alone → backend-only; with `--frontend` → fullstack |
-| `--frontend` | `askama`, `tera`, `minijinja`, `handlebars` | server-side template engine rendered by the backend |
+| `--frontend` | `yew`, `askama`, `tera`, `minijinja`, `handlebars` | `yew` → WASM SPA (alone) or workspace member (with a backend); the rest are server-side template engines |
 | `--db` | `sqlx`, `diesel`, `sea-orm`, `sled` | `sqlx` wires a pool + `.env.example`; the others add the dependency |
 | `--deployment` | `docker`, `kubernetes`, `serverless`, `self-hosted` | `docker` ships a slim multi-stage Dockerfile |
 | `--testing` | `api`, `sqlx`, `mock` | repeatable, comma-separated; adds test modules and dev-dependencies |
@@ -61,8 +61,10 @@ Everything the wizard asks is also a flag on `rise new`:
 | `--no-input` | | never prompt; a non-terminal stdin implies this |
 
 What generates today: Axum and Actix Web backends, fullstack variants of both
-with the four template engines above, plus `--kind cli` and `--kind library`.
-Other combinations the flags accept (`rocket`, `yew`, `embedded`, `game`, ...)
+with the four template engines above or a Yew WASM frontend (a cargo workspace
+where the backend serves the API and the built frontend bundle), frontend-only
+Yew SPAs built with trunk, plus `--kind cli` and `--kind library`.
+Other combinations the flags accept (`rocket`, `leptos`, `embedded`, `game`, ...)
 end with a typed "not available yet" error — that's the roadmap, not a broken
 promise.
 
@@ -105,7 +107,7 @@ Selection for:
 - More, you're free to give more ideas!
 
 Generation for:
--[/] WebApps (backend-only Axum and Actix Web — sqlx pool, tests and WebSockets wired from your choices — plus fullstack with Askama, Tera, Minijinja or Handlebars)
+-[/] WebApps (backend-only Axum and Actix Web — sqlx pool, tests and WebSockets wired from your choices — fullstack with Askama, Tera, Minijinja or Handlebars, and Yew WASM frontends: standalone trunk SPAs or a fullstack workspace)
 -[x] CLI
 -[] Gamedev
 -[] Embedded

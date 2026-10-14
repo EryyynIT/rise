@@ -25,6 +25,10 @@ the reference implementations — copy one and tweak.
 name = "my-template"
 description = "What it scaffolds"
 
+# optional: hide from `rise list` — for templates that only make sense as
+# a building block of a multi-crate plan (see "Composition" below)
+internal = true
+
 [files.exclude_if]
 # output path (after .j2 is stripped) => minijinja expression;
 # the file is skipped when the expression evaluates to true
@@ -50,14 +54,17 @@ Unknown manifest fields are rejected, so typos fail loudly.
 | Variable | Type | Contents |
 |---|---|---|
 | `name` | string | The validated project name |
+| `crate_name` | string | Package name for `Cargo.toml` and binary paths — equals `name`, except for workspace members (`<name>-backend`, `<name>-frontend`) |
 | `backend` | object or `none` | `{ backend, database, deployment, testing, features }` — present when the spec has a backend |
 | `frontend` | string or `none` | Kebab-case frontend id — present when the spec has a frontend |
+| `deployment` | string or `none` | The deployment choice, shape-independent (the backend's, or the frontend-only app's) |
+| `workspace` | bool | `true` when rendering a member of a multi-crate plan — the root step ships project-level files (`.gitignore`, Dockerfile), members should skip theirs |
 | `spec` | object | The full spec enum |
 
-Prefer `backend`/`frontend` over digging into `spec`: the spec enum's shape
-depends on the web-app variant (backend-only / frontend-only / fullstack),
-so paths through it break under strict mode. `backend` and `frontend` are
-flat and shape-independent.
+Prefer `backend`/`frontend`/`deployment` over digging into `spec`: the spec
+enum's shape depends on the web-app variant (backend-only / frontend-only /
+fullstack), so paths through it break under strict mode. The flattened
+fields are shape-independent.
 
 Enum values are kebab-case strings:
 
@@ -80,3 +87,14 @@ doesn't have that stack (`{% if backend %}...{% endif %}`).
   half-written projects.
 - Template paths that would escape the target directory (`../`, absolute)
   are rejected.
+
+## Composition
+
+Most specs map to one template rendered into the project root. Multi-crate
+stacks (today: fullstack with a WASM frontend) map to a **plan** of several
+embedded templates rendered into subdirectories — e.g. the workspace root
+template into `.`, the backend into `backend/`, the frontend into
+`frontend/` — each with its own `crate_name`, all sharing the same render
+context. Composition is embedded-only: `--template` always renders its
+single directory into the project root with `crate_name == name` and
+`workspace == false`.

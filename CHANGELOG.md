@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- WASM frontends with Yew. `--frontend yew` alone generates a trunk-built
+  single-page app (a trunk+nginx Dockerfile ships with
+  `--deployment docker`). Combined with `--backend axum` or
+  `--backend actix` it generates a cargo workspace: `<name>-backend` serves
+  the API under `/api` and the built trunk bundle from `frontend/dist`,
+  `<name>-frontend` carries the Yew app with a `Trunk.toml` dev proxy, and
+  the workspace root adds a README and a multi-stage Dockerfile with a
+  trunk build stage.
+- The render context gains `crate_name` (the package name a template
+  produces — differs from `name` for workspace members), `deployment`
+  (shape-independent, unlike spec paths) and `workspace` (true for members
+  of a multi-crate plan). Template manifests can set `internal = true` to
+  stay out of `rise list`.
+
+### Changed
+
+- `TemplateNotFound` errors for unsupported frontends name the missing
+  combination (`web-leptos`, `web-fullstack-leptos`, ...) instead of a
+  generic `web-frontend`/`web-fullstack`.
+
 ## [0.3.0] - 2026-10-14
 
 ### Added

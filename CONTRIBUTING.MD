@@ -80,8 +80,9 @@ A new template is mostly *data*:
 1. Create `assets/templates/<your-template>/` — a `template.toml` manifest plus
    the files to generate (see [docs/TEMPLATES.md](docs/TEMPLATES.md) for the
    manifest format and the render context).
-2. Add one arm mapping the spec to your template's name in `template_id()`
-   (`src/templates/engine.rs`).
+2. Add one arm mapping the spec to your template in `template_plan()`
+   (`src/templates/engine.rs`) — a single-crate stack is one root step; a
+   multi-crate stack composes several templates into subdirectories.
 3. If your stack needs options the spec doesn't have yet, extend the enums in
    `src/spec.rs` and teach the wizard to ask (`src/wizard/`).
 4. Add a snapshot test (engine tests use `insta`) and an integration test in

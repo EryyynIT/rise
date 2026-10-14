@@ -5,11 +5,14 @@ use axum::{
     response::Response,
 };
 {%- endif %}
-{%- if frontend %}
+{%- if frontend and frontend != 'yew' %}
 use axum::{
     http::StatusCode,
     response::Html,
 };
+{%- endif %}
+{%- if frontend == 'yew' %}
+use tower_http::services::ServeDir;
 {%- endif %}
 {%- if frontend == 'askama' %}
 use askama::Template;
@@ -31,13 +34,21 @@ mod db;
 
 #[tokio::main]
 async fn main() {
+{%- if frontend == 'yew' %}
+    let app = Router::new().route("/api/hello", get(hello));
+{%- else %}
     let app = Router::new().route("/", get(root));
+{%- endif %}
 {%- if 'web-sockets' in backend.features %}
     let app = app.route("/ws", get(ws_handler));
 {%- endif %}
 {%- if backend.database == 'sqlx' %}
     let pool = db::create_pool().await.expect("failed to connect to database");
     let app = app.with_state(pool);
+{%- endif %}
+{%- if frontend == 'yew' %}
+    // Serve the WASM bundle built by trunk (`frontend/dist`) next to the API.
+    let app = app.fallback_service(ServeDir::new("frontend/dist"));
 {%- endif %}
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
@@ -133,6 +144,12 @@ async fn root() -> Result<Html<String>, (StatusCode, String)> {
 fn internal_error(err: impl std::fmt::Display) -> (StatusCode, String) {
     (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
 }
+{%- elif frontend == 'yew' %}
+
+/// Greeting for the WASM frontend.
+async fn hello() -> &'static str {
+    "Hello from {{ name }}!"
+}
 {%- else %}
 
 async fn root() -> &'static str {
@@ -167,9 +184,13 @@ mod tests {
 
     #[tokio::test]
     async fn root_says_hello() {
+{%- if frontend == 'yew' %}
+        let app = Router::new().route("/api/hello", get(hello));
+{%- else %}
         let app = Router::new().route("/", get(root));
+{%- endif %}
         let response = app
-            .oneshot(Request::get("/").body(Body::empty()).expect("request"))
+            .oneshot(Request::get({% if frontend == 'yew' %}"/api/hello"{% else %}"/"{% endif %}).body(Body::empty()).expect("request"))
             .await
             .expect("response");
         assert_eq!(response.status(), StatusCode::OK);

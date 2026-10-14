@@ -48,15 +48,15 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
     init_git(&path);
 
     println!("created ./{}", path.display());
-    let wasm_frontend = matches!(
-        &spec,
-        ProjectSpec::WebApp(WebAppSpec::Frontend(frontend)) if frontend.frontend == Frontend::Yew
-    );
-    let first_command = match &spec {
-        ProjectSpec::Library => "cargo test",
-        _ if wasm_frontend => "trunk serve",
-        _ => "cargo run",
+    let wasm_frontend = match &spec {
+        ProjectSpec::WebApp(WebAppSpec::Frontend(frontend)) => frontend.frontend == Frontend::Yew,
+        ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack)) => {
+            fullstack.frontend == Frontend::Yew
+        }
+        _ => false,
     };
+    let fullstack_wasm =
+        wasm_frontend && matches!(&spec, ProjectSpec::WebApp(WebAppSpec::Fullstack(_)));
     println!("\nnext steps:\n  cd {name}");
     let backend = match &spec {
         ProjectSpec::WebApp(WebAppSpec::Backend(backend)) => Some(backend),
@@ -65,7 +65,8 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
     };
     if let Some(backend) = backend {
         if backend.database == Database::SQLx {
-            println!("  cp .env.example .env  # set DATABASE_URL");
+            let dir = if fullstack_wasm { "backend/" } else { "" };
+            println!("  cp {dir}.env.example {dir}.env  # set DATABASE_URL");
         }
     }
     if wasm_frontend {
@@ -73,7 +74,15 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
             "  rustup target add wasm32-unknown-unknown && cargo install trunk  # one-time setup"
         );
     }
-    println!("  {first_command}");
+    match &spec {
+        ProjectSpec::Library => println!("  cargo test"),
+        _ if fullstack_wasm => {
+            println!("  cargo run -p {name}-backend  # terminal 1: API on :3000");
+            println!("  cd frontend && trunk serve   # terminal 2: SPA on :8080");
+        }
+        _ if wasm_frontend => println!("  trunk serve"),
+        _ => println!("  cargo run"),
+    }
     Ok(())
 }
 

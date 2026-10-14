@@ -50,6 +50,16 @@ impl TemplateStep {
             crate_name: name.to_string(),
         }
     }
+
+    /// A workspace member step: renders into `subdir`, the crate is named
+    /// `<project>-<suffix>`.
+    fn member(id: &'static str, subdir: &'static str, name: &ProjectName, suffix: &str) -> Self {
+        Self {
+            id,
+            subdir,
+            crate_name: format!("{name}-{suffix}"),
+        }
+    }
 }
 
 /// Generate a project from a complete spec into `./<name>/`.
@@ -78,7 +88,14 @@ pub(crate) fn generate(
             template_plan(spec, name).and_then(|plan| render_plan(&plan, spec, name, &target))
         }
         TemplateSource::Dir(path) => Template::from_dir(path).and_then(|template| {
-            render_into(&template, spec, name.as_str(), name.as_str(), &target)
+            render_into(
+                &template,
+                spec,
+                name.as_str(),
+                name.as_str(),
+                false,
+                &target,
+            )
         }),
     };
     if result.is_err() && !target_existed {
@@ -96,6 +113,9 @@ fn render_plan(
     name: &ProjectName,
     target: &Path,
 ) -> Result<()> {
+    // Multi-step plans are workspaces; member templates use the flag to
+    // drop files the workspace root already provides.
+    let workspace = steps.len() > 1;
     for step in steps {
         let template = Template::embedded(step.id)?;
         render_into(
@@ -103,6 +123,7 @@ fn render_plan(
             spec,
             name.as_str(),
             &step.crate_name,
+            workspace,
             &target.join(step.subdir),
         )?;
     }
@@ -142,8 +163,29 @@ fn template_plan(spec: &ProjectSpec, name: &ProjectName) -> Result<Vec<TemplateS
                 name,
             )])
         }
-        ProjectSpec::WebApp(WebAppSpec::Fullstack(_)) => {
-            Err(Error::TemplateNotFound("web-fullstack".into()))
+        // A fullstack app with a WASM frontend is a workspace: the backend
+        // template renders into `backend/` (its `frontend`-conditional
+        // blocks add static serving), the frontend template into
+        // `frontend/`, and a small internal template wires up the root.
+        ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack))
+            if fullstack.frontend == Frontend::Yew =>
+        {
+            Ok(vec![
+                TemplateStep::root("web-wasm-workspace", name),
+                TemplateStep::member(
+                    backend_template(fullstack.backend.backend)?,
+                    "backend",
+                    name,
+                    "backend",
+                ),
+                TemplateStep::member("frontend-yew", "frontend", name, "frontend"),
+            ])
+        }
+        ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack)) => {
+            Err(Error::TemplateNotFound(format!(
+                "web-fullstack-{}",
+                fullstack.frontend.to_string().to_lowercase()
+            )))
         }
         ProjectSpec::CliApp => Ok(vec![TemplateStep::root("cli", name)]),
         ProjectSpec::Library => Ok(vec![TemplateStep::root("library", name)]),
@@ -166,6 +208,8 @@ fn template_plan(spec: &ProjectSpec, name: &ProjectName) -> Result<Vec<TemplateS
 /// `crate_name` equals `name` for a single-crate project; multi-crate
 /// plans (workspaces) give each step its own crate name, so `Cargo.toml`
 /// and binary paths must use `crate_name`, prose should use `name`.
+/// `workspace` tells member templates that a root template already
+/// provides project-level files (`.gitignore`, Dockerfile).
 #[derive(Serialize)]
 struct RenderContext<'a> {
     name: &'a str,
@@ -174,10 +218,11 @@ struct RenderContext<'a> {
     backend: Option<&'a BackendSpec>,
     frontend: Option<Frontend>,
     deployment: Option<Deployment>,
+    workspace: bool,
 }
 
 impl<'a> RenderContext<'a> {
-    fn new(name: &'a str, crate_name: &'a str, spec: &'a ProjectSpec) -> Self {
+    fn new(name: &'a str, crate_name: &'a str, workspace: bool, spec: &'a ProjectSpec) -> Self {
         let (backend, frontend, deployment) = match spec {
             ProjectSpec::WebApp(WebAppSpec::Backend(backend)) => {
                 (Some(backend), None, Some(backend.deployment))
@@ -199,6 +244,7 @@ impl<'a> RenderContext<'a> {
             backend,
             frontend,
             deployment,
+            workspace,
         }
     }
 }
@@ -226,6 +272,7 @@ fn render_into(
     spec: &ProjectSpec,
     name: &str,
     crate_name: &str,
+    workspace: bool,
     target: &Path,
 ) -> Result<()> {
     let mut env = Environment::new();
@@ -240,7 +287,7 @@ fn render_into(
         .expect("default syntax config is valid");
     env.set_syntax(syntax);
 
-    let ctx = Value::from(Serde(RenderContext::new(name, crate_name, spec)));
+    let ctx = Value::from(Serde(RenderContext::new(name, crate_name, workspace, spec)));
     let excluded = excluded_paths(template, &env, &ctx)?;
 
     for file in template.files() {
@@ -330,7 +377,7 @@ mod tests {
         name: &str,
         target: &Path,
     ) -> Result<()> {
-        render_into(template, spec, name, name, target)
+        render_into(template, spec, name, name, false, target)
     }
 
     fn backend_spec(backend: Backend, deployment: Deployment) -> ProjectSpec {
@@ -370,6 +417,19 @@ mod tests {
         ProjectSpec::WebApp(WebAppSpec::Frontend(FrontendSpec {
             frontend,
             deployment: Some(deployment),
+        }))
+    }
+
+    fn fullstack_spec_tested(backend: Backend, frontend: Frontend) -> ProjectSpec {
+        ProjectSpec::WebApp(WebAppSpec::Fullstack(FullstackSpec {
+            frontend,
+            backend: BackendSpec {
+                backend,
+                database: Database::SQLx,
+                deployment: Deployment::Docker,
+                testing: vec![Testing::Api],
+                features: vec![],
+            },
         }))
     }
 
@@ -444,11 +504,54 @@ mod tests {
     }
 
     #[test]
-    fn fullstack_with_wasm_frontend_is_template_not_found() {
+    fn yew_fullstack_plans_a_workspace() {
         let name = project_name("app");
         let spec = fullstack_spec(Backend::Axum, Frontend::Yew);
-        let err = template_plan(&spec, &name).expect_err("no yew fullstack template yet");
-        assert!(matches!(err, Error::TemplateNotFound(id) if id == "web-fullstack"));
+        let plan = template_plan(&spec, &name).expect("plan");
+        assert_eq!(
+            plan,
+            vec![
+                TemplateStep::root("web-wasm-workspace", &name),
+                TemplateStep::member("web-axum", "backend", &name, "backend"),
+                TemplateStep::member("frontend-yew", "frontend", &name, "frontend"),
+            ]
+        );
+    }
+
+    #[test]
+    fn other_fullstack_wasm_frontends_are_template_not_found() {
+        let name = project_name("app");
+        let spec = fullstack_spec(Backend::Axum, Frontend::Leptos);
+        let err = template_plan(&spec, &name).expect_err("no leptos fullstack template yet");
+        assert!(matches!(err, Error::TemplateNotFound(id) if id == "web-fullstack-leptos"));
+    }
+
+    #[test]
+    fn yew_fullstack_renders_a_workspace() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let name = project_name("app");
+        let spec = fullstack_spec(Backend::Axum, Frontend::Yew);
+        let plan = template_plan(&spec, &name).expect("plan");
+
+        render_plan(&plan, &spec, &name, tmp.path()).expect("render");
+
+        let root = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read workspace");
+        assert!(root.contains("[workspace]"));
+        assert!(root.contains("\"backend\""));
+        let backend = fs::read_to_string(tmp.path().join("backend/Cargo.toml")).expect("read");
+        assert!(backend.contains("name = \"app-backend\""));
+        assert!(backend.contains("tower-http"));
+        let main = fs::read_to_string(tmp.path().join("backend/src/main.rs")).expect("read");
+        assert!(main.contains("/api/hello"));
+        assert!(main.contains("ServeDir"));
+        let frontend = fs::read_to_string(tmp.path().join("frontend/Cargo.toml")).expect("read");
+        assert!(frontend.contains("name = \"app-frontend\""));
+        assert!(frontend.contains("gloo-net"));
+        assert!(tmp.path().join("frontend/Trunk.toml").exists());
+        // The workspace root ships the Dockerfile and .gitignore.
+        assert!(tmp.path().join("Dockerfile").exists());
+        assert!(!tmp.path().join("backend/Dockerfile").exists());
+        assert!(!tmp.path().join("backend/.gitignore").exists());
     }
 
     #[test]
@@ -1051,6 +1154,39 @@ mod tests {
         insta::assert_snapshot!(snapshot_output(&fullstack_spec(
             Backend::Actix,
             Frontend::Handlebars
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_axum_fullstack_yew() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec(
+            Backend::Axum,
+            Frontend::Yew
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_fullstack_yew() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec(
+            Backend::Actix,
+            Frontend::Yew
+        )));
+    }
+
+    // The api test module switches routes under a WASM frontend.
+    #[test]
+    fn snapshot_web_axum_fullstack_yew_api_testing() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_tested(
+            Backend::Axum,
+            Frontend::Yew
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_fullstack_yew_api_testing() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_tested(
+            Backend::Actix,
+            Frontend::Yew
         )));
     }
 

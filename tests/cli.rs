@@ -362,7 +362,9 @@ fn new_generates_fullstack_project_without_prompts() {
 }
 
 #[test]
-fn fullstack_with_wasm_frontend_is_an_actionable_error() {
+fn new_generates_yew_fullstack_workspace_without_prompts() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
     Command::cargo_bin("rise")
         .expect("binary")
         .args([
@@ -378,9 +380,102 @@ fn fullstack_with_wasm_frontend_is_an_actionable_error() {
             "docker",
             "--no-input",
         ])
+        .current_dir(tmp.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("created ./wasm-app"))
+        .stdout(predicate::str::contains("cargo run -p wasm-app-backend"))
+        .stdout(predicate::str::contains("cd frontend && trunk serve"));
+
+    let project = tmp.path().join("wasm-app");
+    let root = std::fs::read_to_string(project.join("Cargo.toml")).expect("read workspace");
+    assert!(root.contains("[workspace]"));
+    assert!(root.contains("\"backend\""));
+    assert!(root.contains("\"frontend\""));
+
+    let backend =
+        std::fs::read_to_string(project.join("backend/Cargo.toml")).expect("read backend");
+    assert!(backend.contains("name = \"wasm-app-backend\""));
+    assert!(backend.contains("tower-http"));
+    let main_rs =
+        std::fs::read_to_string(project.join("backend/src/main.rs")).expect("read main.rs");
+    assert!(main_rs.contains("/api/hello"));
+    assert!(main_rs.contains("ServeDir"));
+
+    let frontend =
+        std::fs::read_to_string(project.join("frontend/Cargo.toml")).expect("read frontend");
+    assert!(frontend.contains("name = \"wasm-app-frontend\""));
+    assert!(frontend.contains("yew"));
+    assert!(frontend.contains("gloo-net"));
+    let trunk_toml =
+        std::fs::read_to_string(project.join("frontend/Trunk.toml")).expect("read Trunk.toml");
+    assert!(trunk_toml.contains("http://localhost:3000/api/"));
+
+    // The workspace root ships project-level files; members don't repeat them.
+    assert!(project.join("Dockerfile").exists());
+    assert!(project.join("README.md").exists());
+    assert!(!project.join("backend/Dockerfile").exists());
+    assert!(!project.join("frontend/Dockerfile").exists());
+    assert!(project.join(".git").exists(), "git init ran");
+}
+
+#[test]
+fn new_generates_actix_yew_workspace_without_prompts() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "actix-wasm",
+            "--backend",
+            "actix",
+            "--frontend",
+            "yew",
+            "--db",
+            "sled",
+            "--deployment",
+            "self-hosted",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let project = tmp.path().join("actix-wasm");
+    let backend =
+        std::fs::read_to_string(project.join("backend/Cargo.toml")).expect("read backend");
+    assert!(backend.contains("actix-files"));
+    let main_rs =
+        std::fs::read_to_string(project.join("backend/src/main.rs")).expect("read main.rs");
+    assert!(main_rs.contains("/api/hello"));
+    assert!(main_rs.contains("Files::new"));
+    assert!(
+        !project.join("Dockerfile").exists(),
+        "self-hosted excludes it"
+    );
+}
+
+#[test]
+fn fullstack_with_other_wasm_frontends_is_an_actionable_error() {
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "leptos-app",
+            "--backend",
+            "axum",
+            "--frontend",
+            "leptos",
+            "--db",
+            "sqlx",
+            "--deployment",
+            "docker",
+            "--no-input",
+        ])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("web-fullstack"));
+        .stderr(predicate::str::contains("web-fullstack-leptos"));
 }
 
 #[test]

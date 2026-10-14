@@ -10,6 +10,9 @@ axum = { version = "0.8", features = ["ws"] }
 axum = "0.8"
 {%- endif %}
 tokio = { version = "1", features = ["full"] }
+{%- if frontend == 'yew' %}
+tower-http = { version = "0.6", features = ["fs"] }
+{%- endif %}
 {%- if frontend == 'askama' %}
 askama = "0.16"
 {%- elif frontend == 'tera' %}

@@ -1,0 +1,5 @@
+/target
+**/dist
+{%- if backend and backend.database == 'sqlx' %}
+.env
+{%- endif %}

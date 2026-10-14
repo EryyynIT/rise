@@ -5,9 +5,13 @@ description = "Actix Web backend, optionally with a server-side template engine"
 # (`.j2` already stripped); when the expression — evaluated against the
 # render context — is true, the file is skipped.
 [files.exclude_if]
-Dockerfile = "backend.deployment != 'docker'"
+# A WASM-fullstack workspace ships its own Dockerfile and .gitignore
+# at the root.
+Dockerfile = "backend.deployment != 'docker' or workspace"
+".gitignore" = "workspace"
 "src/db.rs" = "backend.database != 'sqlx'"
 ".env.example" = "backend.database != 'sqlx'"
-# Handlebars uses its own .hbs file; the other engines share index.html.
-"templates/index.html" = "frontend is none or frontend == 'handlebars'"
-"templates/index.hbs" = "frontend is none or frontend != 'handlebars'"
+# Handlebars uses its own .hbs file; askama/tera/minijinja share index.html;
+# every other frontend (or none) ships neither.
+"templates/index.html" = "frontend not in ['askama', 'tera', 'minijinja']"
+"templates/index.hbs" = "frontend != 'handlebars'"

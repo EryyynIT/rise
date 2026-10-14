@@ -5,6 +5,9 @@ edition = "2024"
 
 [dependencies]
 actix-web = "4"
+{%- if frontend == 'yew' %}
+actix-files = "0.6"
+{%- endif %}
 {%- if 'web-sockets' in backend.features %}
 actix-ws = "0.3"
 {%- endif %}

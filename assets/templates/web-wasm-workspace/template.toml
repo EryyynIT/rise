@@ -1,0 +1,7 @@
+name = "web-wasm-workspace"
+description = "Workspace root wiring a backend crate and a WASM frontend crate together"
+# Building block of fullstack WASM plans, not a user-selectable stack.
+internal = true
+
+[files.exclude_if]
+Dockerfile = "backend.deployment != 'docker'"

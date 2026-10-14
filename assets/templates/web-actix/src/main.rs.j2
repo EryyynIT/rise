@@ -1,8 +1,11 @@
 use actix_web::{App, HttpServer, Responder, get};
 {%- if 'web-sockets' in backend.features %}
 use actix_web::{HttpRequest, HttpResponse};
-{%- elif frontend %}
+{%- elif frontend and frontend != 'yew' %}
 use actix_web::HttpResponse;
+{%- endif %}
+{%- if frontend == 'yew' %}
+use actix_files::Files;
 {%- endif %}
 {%- if frontend == 'askama' %}
 use askama::Template;
@@ -124,6 +127,13 @@ fn render_response(result: Result<String, impl std::fmt::Display>) -> HttpRespon
         Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
     }
 }
+{%- elif frontend == 'yew' %}
+
+/// Greeting for the WASM frontend.
+#[get("/api/hello")]
+async fn hello() -> impl Responder {
+    "Hello from {{ name }}!"
+}
 {%- else %}
 
 #[get("/")]
@@ -158,9 +168,13 @@ async fn main() -> std::io::Result<()> {
 {%- endif %}
     println!("listening on http://localhost:3000");
     HttpServer::new(move || {
-        let app = App::new().service(root);
+        let app = App::new().service({% if frontend == 'yew' %}hello{% else %}root{% endif %});
 {%- if 'web-sockets' in backend.features %}
         let app = app.service(ws);
+{%- endif %}
+{%- if frontend == 'yew' %}
+        // Serve the WASM bundle built by trunk (`frontend/dist`) next to the API.
+        let app = app.service(Files::new("/", "frontend/dist").index_file("index.html"));
 {%- endif %}
 {%- if backend.database == 'sqlx' %}
         app.app_data(actix_web::web::Data::new(pool.clone()))
@@ -181,8 +195,13 @@ mod tests {
 
     #[actix_web::test]
     async fn root_says_hello() {
+{%- if frontend == 'yew' %}
+        let app = test::init_service(App::new().service(hello)).await;
+        let req = test::TestRequest::get().uri("/api/hello").to_request();
+{%- else %}
         let app = test::init_service(App::new().service(root)).await;
         let req = test::TestRequest::get().uri("/").to_request();
+{%- endif %}
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
     }

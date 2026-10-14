@@ -319,6 +319,19 @@ fn fullstack_with_wasm_frontend_is_an_actionable_error() {
 }
 
 #[test]
+fn completions_register_for_the_binary_name() {
+    // The package is `rise-cli`, but the installed binary is `rise`;
+    // completion scripts must register for the binary name.
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args(["completions", "bash"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("complete -F _rise"))
+        .stdout(predicate::str::contains("rise-cli").not());
+}
+
+#[test]
 fn conflicting_flags_are_rejected_before_prompts() {
     Command::cargo_bin("rise")
         .expect("binary")

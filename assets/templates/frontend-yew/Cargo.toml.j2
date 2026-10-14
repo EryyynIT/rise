@@ -1,0 +1,11 @@
+[package]
+name = "{{ crate_name }}"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+yew = { version = "0.22", features = ["csr"] }
+{%- if backend %}
+gloo-net = "0.6"
+wasm-bindgen-futures = "0.4"
+{%- endif %}

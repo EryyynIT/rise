@@ -219,13 +219,14 @@ fn fill_multi<T>(
 /// Frontend choices depend on whether a Rust backend is present.
 fn frontend_options(has_backend: bool) -> Vec<Frontend> {
     use Frontend::*;
-    let mut options = vec![Svelte, React, Vue, Minijinja, Handlebars];
-    let specific = if has_backend {
-        [Yew, Tera, Askama]
+    // Yew works both ways: a standalone trunk SPA or on top of a backend.
+    let mut options = vec![Svelte, React, Vue, Minijinja, Handlebars, Yew];
+    let specific: &[Frontend] = if has_backend {
+        &[Tera, Askama]
     } else {
-        [Leptos, Seed, Sauron]
+        &[Leptos, Seed, Sauron]
     };
-    options.extend(specific);
+    options.extend_from_slice(specific);
     options
 }
 
@@ -246,7 +247,7 @@ mod tests {
         let options = frontend_options(false);
         assert!(options.contains(&Frontend::Leptos));
         assert!(options.contains(&Frontend::Handlebars));
-        assert!(!options.contains(&Frontend::Yew));
+        assert!(options.contains(&Frontend::Yew));
     }
 
     #[test]

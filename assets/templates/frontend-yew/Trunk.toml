@@ -1,0 +1,4 @@
+# Development proxy: the trunk dev server forwards requests under /api
+# to the backend (URIs are forwarded unchanged).
+[[proxy]]
+backend = "http://localhost:3000/api/"

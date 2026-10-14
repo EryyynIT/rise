@@ -11,7 +11,7 @@ use serde::Serialize;
 
 use crate::error::{Error, Result};
 use crate::name::ProjectName;
-use crate::spec::{Backend, BackendSpec, Frontend, ProjectSpec, WebAppSpec};
+use crate::spec::{Backend, BackendSpec, Deployment, Frontend, ProjectSpec, WebAppSpec};
 use crate::templates::template::{RENDER_SUFFIX, Template, TemplateFile};
 
 /// Where to load the template from.
@@ -124,9 +124,13 @@ fn template_plan(spec: &ProjectSpec, name: &ProjectName) -> Result<Vec<TemplateS
             backend_template(backend.backend)?,
             name,
         )]),
-        ProjectSpec::WebApp(WebAppSpec::Frontend(_)) => {
-            Err(Error::TemplateNotFound("web-frontend".into()))
-        }
+        ProjectSpec::WebApp(WebAppSpec::Frontend(frontend)) => match frontend.frontend {
+            Frontend::Yew => Ok(vec![TemplateStep::root("frontend-yew", name)]),
+            other => Err(Error::TemplateNotFound(format!(
+                "web-{}",
+                other.to_string().to_lowercase()
+            ))),
+        },
         // A fullstack app with a template engine is the backend template
         // plus server-side rendering; the `frontend` context field drives
         // the engine-specific blocks.
@@ -152,11 +156,12 @@ fn template_plan(spec: &ProjectSpec, name: &ProjectName) -> Result<Vec<TemplateS
 /// of the package being rendered, the full spec, and the web stacks
 /// flattened out of the spec's enum nesting.
 ///
-/// Templates use `backend`/`frontend` rather than digging into
+/// Templates use `backend`/`frontend`/`deployment` rather than digging into
 /// `spec.WebApp.Backend` vs `spec.WebApp.Fullstack.backend`: strict
 /// undefined behavior makes spec access shape-dependent, the flattened
 /// fields are not. `None` serializes as a minijinja `none`, so
-/// `{% if backend %}` guards every access.
+/// `{% if backend %}` guards every access. `deployment` is the backend's
+/// deployment when there is one, the frontend-only app's otherwise.
 ///
 /// `crate_name` equals `name` for a single-crate project; multi-crate
 /// plans (workspaces) give each step its own crate name, so `Cargo.toml`
@@ -168,17 +173,24 @@ struct RenderContext<'a> {
     spec: &'a ProjectSpec,
     backend: Option<&'a BackendSpec>,
     frontend: Option<Frontend>,
+    deployment: Option<Deployment>,
 }
 
 impl<'a> RenderContext<'a> {
     fn new(name: &'a str, crate_name: &'a str, spec: &'a ProjectSpec) -> Self {
-        let (backend, frontend) = match spec {
-            ProjectSpec::WebApp(WebAppSpec::Backend(backend)) => (Some(backend), None),
-            ProjectSpec::WebApp(WebAppSpec::Frontend(frontend)) => (None, Some(frontend.frontend)),
-            ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack)) => {
-                (Some(&fullstack.backend), Some(fullstack.frontend))
+        let (backend, frontend, deployment) = match spec {
+            ProjectSpec::WebApp(WebAppSpec::Backend(backend)) => {
+                (Some(backend), None, Some(backend.deployment))
             }
-            _ => (None, None),
+            ProjectSpec::WebApp(WebAppSpec::Frontend(frontend)) => {
+                (None, Some(frontend.frontend), frontend.deployment)
+            }
+            ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack)) => (
+                Some(&fullstack.backend),
+                Some(fullstack.frontend),
+                Some(fullstack.backend.deployment),
+            ),
+            _ => (None, None, None),
         };
         Self {
             name,
@@ -186,6 +198,7 @@ impl<'a> RenderContext<'a> {
             spec,
             backend,
             frontend,
+            deployment,
         }
     }
 }
@@ -302,7 +315,9 @@ fn safe_join(target: &Path, rel: &str) -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::spec::{BackendSpec, Database, Deployment, Feature, FullstackSpec, Testing};
+    use crate::spec::{
+        BackendSpec, Database, Deployment, Feature, FrontendSpec, FullstackSpec, Testing,
+    };
 
     fn project_name(name: &str) -> ProjectName {
         ProjectName::new(name.to_owned()).expect("valid project name")
@@ -348,6 +363,13 @@ mod tests {
                 testing: vec![],
                 features: vec![],
             },
+        }))
+    }
+
+    fn frontend_spec(frontend: Frontend, deployment: Deployment) -> ProjectSpec {
+        ProjectSpec::WebApp(WebAppSpec::Frontend(FrontendSpec {
+            frontend,
+            deployment: Some(deployment),
         }))
     }
 
@@ -403,6 +425,22 @@ mod tests {
         let spec = fullstack_spec(Backend::Actix, Frontend::Tera);
         let plan = template_plan(&spec, &name).expect("plan");
         assert_eq!(plan, vec![TemplateStep::root("web-actix", &name)]);
+    }
+
+    #[test]
+    fn yew_frontend_plans_the_frontend_template() {
+        let name = project_name("app");
+        let spec = frontend_spec(Frontend::Yew, Deployment::SelfHosted);
+        let plan = template_plan(&spec, &name).expect("plan");
+        assert_eq!(plan, vec![TemplateStep::root("frontend-yew", &name)]);
+    }
+
+    #[test]
+    fn other_frontend_only_stacks_are_template_not_found() {
+        let name = project_name("app");
+        let spec = frontend_spec(Frontend::Leptos, Deployment::SelfHosted);
+        let err = template_plan(&spec, &name).expect_err("no leptos template yet");
+        assert!(matches!(err, Error::TemplateNotFound(id) if id == "web-leptos"));
     }
 
     #[test]
@@ -929,6 +967,22 @@ mod tests {
     #[test]
     fn snapshot_cli() {
         insta::assert_snapshot!(snapshot_output(&ProjectSpec::CliApp));
+    }
+
+    #[test]
+    fn snapshot_frontend_yew_docker() {
+        insta::assert_snapshot!(snapshot_output(&frontend_spec(
+            Frontend::Yew,
+            Deployment::Docker
+        )));
+    }
+
+    #[test]
+    fn snapshot_frontend_yew_self_hosted() {
+        insta::assert_snapshot!(snapshot_output(&frontend_spec(
+            Frontend::Yew,
+            Deployment::SelfHosted
+        )));
     }
 
     #[test]

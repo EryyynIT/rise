@@ -282,7 +282,10 @@ Dockerfile = "spec.WebApp.Backend.deployment != 'docker'"
     fn lists_embedded_template_manifests() {
         let manifests = list_embedded().expect("embedded manifests parse");
         let names: Vec<&str> = manifests.iter().map(|m| m.name.as_str()).collect();
-        assert_eq!(names, ["cli", "library", "web-actix", "web-axum"]);
+        assert_eq!(
+            names,
+            ["cli", "frontend-yew", "library", "web-actix", "web-axum"]
+        );
     }
 
     #[test]

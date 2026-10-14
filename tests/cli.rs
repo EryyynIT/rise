@@ -252,6 +252,71 @@ fn new_generates_library_project_without_prompts() {
 }
 
 #[test]
+fn new_generates_yew_frontend_without_prompts() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "spa-app",
+            "--frontend",
+            "yew",
+            "--deployment",
+            "self-hosted",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("created ./spa-app"))
+        .stdout(predicate::str::contains("trunk serve"))
+        .stdout(predicate::str::contains("wasm32-unknown-unknown"));
+
+    let project = tmp.path().join("spa-app");
+    let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read Cargo.toml");
+    assert!(cargo_toml.contains("name = \"spa-app\""));
+    assert!(cargo_toml.contains("yew"));
+    assert!(!cargo_toml.contains("gloo-net"), "no backend to call");
+    assert!(project.join("src/main.rs").exists());
+    assert!(project.join("index.html").exists());
+    assert!(
+        !project.join("Dockerfile").exists(),
+        "self-hosted excludes it"
+    );
+    assert!(
+        !project.join("Trunk.toml").exists(),
+        "no backend to proxy to"
+    );
+    assert!(project.join(".git").exists(), "git init ran");
+}
+
+#[test]
+fn yew_frontend_with_docker_gets_a_static_serving_dockerfile() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "spa-app",
+            "--frontend",
+            "yew",
+            "--deployment",
+            "docker",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let dockerfile =
+        std::fs::read_to_string(tmp.path().join("spa-app/Dockerfile")).expect("read Dockerfile");
+    assert!(dockerfile.contains("trunk build --release"));
+    assert!(dockerfile.contains("nginx"));
+}
+
+#[test]
 fn new_reports_the_missing_flag_when_non_interactive() {
     Command::cargo_bin("rise")
         .expect("binary")

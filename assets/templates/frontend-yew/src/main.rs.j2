@@ -1,0 +1,40 @@
+use yew::prelude::*;
+{%- if backend %}
+use gloo_net::http::Request;
+{%- endif %}
+{%- if backend %}
+
+/// Root component: shows the greeting fetched from the backend API
+/// (in development trunk proxies `/api` to the backend — see Trunk.toml).
+#[function_component(App)]
+fn app() -> Html {
+    let message = use_state(|| "loading…".to_owned());
+    {
+        let message = message.clone();
+        use_effect_with((), move |_| {
+            wasm_bindgen_futures::spawn_local(async move {
+                let text = match Request::get("/api/hello").send().await {
+                    Ok(response) => response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "failed to read the response body".to_owned()),
+                    Err(_) => "the backend is unreachable".to_owned(),
+                };
+                message.set(text);
+            });
+        });
+    }
+    html! { <h1>{ &*message }</h1> }
+}
+{%- else %}
+
+/// Root component.
+#[function_component(App)]
+fn app() -> Html {
+    html! { <h1>{ "Hello from {{ name }}!" }</h1> }
+}
+{%- endif %}
+
+fn main() {
+    yew::Renderer::<App>::new().render();
+}

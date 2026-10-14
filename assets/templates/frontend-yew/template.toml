@@ -1,0 +1,11 @@
+name = "frontend-yew"
+description = "Yew single-page app (WASM, built with trunk)"
+
+# File conditionality lives here, not in Rust code. Keys are OUTPUT paths
+# (`.j2` already stripped); when the expression — evaluated against the
+# render context — is true, the file is skipped.
+[files.exclude_if]
+# The dev proxy only makes sense with a backend to forward to.
+"Trunk.toml" = "backend is none"
+# In a fullstack workspace the root template ships the Dockerfile.
+Dockerfile = "backend is not none or deployment != 'docker'"

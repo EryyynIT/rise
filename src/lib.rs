@@ -4,7 +4,7 @@ use colored::Colorize;
 
 use crate::cli::{Command, NewArgs};
 use crate::color::{FERRIS_TEAL, RUST_ORANGE, STEEL_GRAY};
-use crate::spec::{Database, ProjectSpec, WebAppSpec};
+use crate::spec::{Database, Frontend, ProjectSpec, WebAppSpec};
 
 mod cli;
 mod color;
@@ -48,8 +48,13 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
     init_git(&path);
 
     println!("created ./{}", path.display());
-    let first_command = match spec {
+    let wasm_frontend = matches!(
+        &spec,
+        ProjectSpec::WebApp(WebAppSpec::Frontend(frontend)) if frontend.frontend == Frontend::Yew
+    );
+    let first_command = match &spec {
         ProjectSpec::Library => "cargo test",
+        _ if wasm_frontend => "trunk serve",
         _ => "cargo run",
     };
     println!("\nnext steps:\n  cd {name}");
@@ -62,6 +67,11 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
         if backend.database == Database::SQLx {
             println!("  cp .env.example .env  # set DATABASE_URL");
         }
+    }
+    if wasm_frontend {
+        println!(
+            "  rustup target add wasm32-unknown-unknown && cargo install trunk  # one-time setup"
+        );
     }
     println!("  {first_command}");
     Ok(())

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Leptos fullstack apps: `--backend axum --frontend leptos` (or `actix`)
+  generates a single crate modeled on the official start-axum/start-actix
+  templates — server-side rendering plus hydration, built with
+  cargo-leptos (`[package.metadata.leptos]`, ssr/hydrate features), with a
+  multi-stage Dockerfile when `--deployment docker`.
+- The render context gains `crate_ident`: `crate_name` with `-` replaced
+  by `_`, for Rust use-statements inside generated code.
+
+### Changed
+
+- `BackendSpec.database` is now optional: a Leptos fullstack app carries
+  no database, because server functions replace the REST stack that
+  `--db`, `--testing` and `--features` configure. Passing those flags
+  with a leptos frontend is rejected with an actionable error instead of
+  being silently ignored; the wizard skips those questions for leptos.
+
 ## [0.4.0] - 2026-10-14
 
 ### Added

@@ -811,6 +811,62 @@ fn fish_completions_cover_the_shell_argument() {
 }
 
 #[test]
+fn failed_generation_removes_the_half_written_project() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let template_dir = tmp.path().join("broken-template");
+    std::fs::create_dir(&template_dir).expect("mkdir");
+    std::fs::write(
+        template_dir.join("template.toml"),
+        "name = \"broken\"\ndescription = \"fails mid-render\"",
+    )
+    .expect("write manifest");
+    // Disk templates render in sorted path order: this file lands first...
+    std::fs::write(template_dir.join("01-note.txt.j2"), "ok").expect("write file");
+    // ...and this one fails under strict undefined behavior.
+    std::fs::write(template_dir.join("zz-boom.txt.j2"), "{{ nope }}").expect("write file");
+
+    let work = tmp.path().join("work");
+    std::fs::create_dir(&work).expect("mkdir");
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "doomed-app",
+            "--kind",
+            "cli",
+            "--template",
+            template_dir.to_str().expect("utf8 path"),
+            "--no-input",
+        ])
+        .current_dir(&work)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("render failed"));
+
+    assert!(
+        !work.join("doomed-app").exists(),
+        "no half-written project left behind"
+    );
+}
+
+#[test]
+fn new_into_an_existing_empty_directory_works() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let work = tmp.path().join("work");
+    std::fs::create_dir(&work).expect("mkdir");
+    std::fs::create_dir(work.join("empty-app")).expect("mkdir empty target");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args(["new", "empty-app", "--kind", "cli", "--no-input"])
+        .current_dir(&work)
+        .assert()
+        .success();
+
+    assert!(work.join("empty-app/src/main.rs").exists());
+}
+
+#[test]
 fn conflicting_flags_are_rejected_before_prompts() {
     Command::cargo_bin("rise")
         .expect("binary")

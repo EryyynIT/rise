@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ignored pool-connectivity test, `mock` adds the mockall dev-dependency.
 - `--features web-sockets` adds a WebSocket echo endpoint (`/ws`) to both web
   templates.
+- Fullstack generation with a server-side template engine: `--backend axum`
+  (or `actix`) combined with `--frontend askama`, `tera`, `minijinja` or
+  `handlebars` renders the engine dependency, a root handler serving
+  `templates/index.html` (`index.hbs` for Handlebars) and the template file
+  itself. Runtime engines embed the template into the binary via
+  `include_str!`, so the app runs from any working directory, including the
+  slim Docker image.
 - Next steps for sqlx projects mention `cp .env.example .env`.
 
 ### Changed

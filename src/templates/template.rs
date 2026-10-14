@@ -76,6 +76,10 @@ impl Template {
         let mut files = Vec::new();
         collect_fs(root, Path::new(""), &mut files).map_err(unreadable)?;
         files.retain(|f| f.path != MANIFEST_FILE);
+        // Deterministic render order, independent of the filesystem's
+        // directory iteration order (embedded templates are ordered at
+        // compile time).
+        files.sort_by(|a, b| a.path.cmp(&b.path));
 
         Ok(Self { manifest, files })
     }

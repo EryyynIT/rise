@@ -611,6 +611,102 @@ fn fullstack_with_other_wasm_frontends_is_an_actionable_error() {
 }
 
 #[test]
+fn new_generates_leptos_axum_fullstack_without_prompts() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "leptos-app",
+            "--backend",
+            "axum",
+            "--frontend",
+            "leptos",
+            "--deployment",
+            "docker",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("created ./leptos-app"))
+        .stdout(predicate::str::contains("cargo-leptos"))
+        .stdout(predicate::str::contains("cargo leptos watch"))
+        // No database wiring yet, hence no .env hint.
+        .stdout(predicate::str::contains(".env").not());
+
+    let project = tmp.path().join("leptos-app");
+    let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read");
+    assert!(cargo_toml.contains("name = \"leptos-app\""));
+    assert!(cargo_toml.contains("leptos_axum"));
+    assert!(cargo_toml.contains("[package.metadata.leptos]"));
+    assert!(project.join("src/app.rs").exists());
+    assert!(project.join("src/lib.rs").exists());
+    assert!(project.join("style/main.css").exists());
+    let dockerfile = std::fs::read_to_string(project.join("Dockerfile")).expect("read");
+    assert!(dockerfile.contains("cargo-leptos"));
+    assert!(!project.join(".env.example").exists());
+    assert!(!project.join("src/db.rs").exists());
+}
+
+#[test]
+fn new_generates_leptos_actix_fullstack_without_prompts() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "leptos-app",
+            "--backend",
+            "actix",
+            "--frontend",
+            "leptos",
+            "--deployment",
+            "self-hosted",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let project = tmp.path().join("leptos-app");
+    let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read");
+    assert!(cargo_toml.contains("leptos_actix"));
+    let main_rs = std::fs::read_to_string(project.join("src/main.rs")).expect("read");
+    assert!(main_rs.contains("actix_web"));
+    assert!(
+        !project.join("Dockerfile").exists(),
+        "self-hosted excludes it"
+    );
+}
+
+#[test]
+fn leptos_rejects_backend_stack_options() {
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "leptos-app",
+            "--backend",
+            "axum",
+            "--frontend",
+            "leptos",
+            "--db",
+            "sqlx",
+            "--deployment",
+            "docker",
+            "--no-input",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "not supported with a leptos frontend",
+        ));
+}
+
+#[test]
 fn new_with_template_dir_uses_the_custom_template() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let template_dir = tmp.path().join("custom-template");

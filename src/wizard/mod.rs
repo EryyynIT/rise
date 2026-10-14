@@ -262,6 +262,23 @@ mod tests {
     }
 
     #[test]
+    fn leptos_rejects_backend_stack_flags() {
+        let args = NewArgs {
+            web: WebFlags {
+                backend: Some(Backend::Axum),
+                frontend: Some(Frontend::Leptos),
+                database: Some(Database::SQLx),
+                ..WebFlags::default()
+            },
+            ..NewArgs::default()
+        };
+        assert!(matches!(
+            validate_flags(&args),
+            Err(Error::ConflictingOptions(_))
+        ));
+    }
+
+    #[test]
     fn sqlx_testing_requires_sqlx_database() {
         let args = NewArgs {
             web: WebFlags {

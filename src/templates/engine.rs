@@ -532,6 +532,18 @@ mod tests {
     }
 
     #[test]
+    fn leptos_fullstack_plans_a_single_root_step() {
+        let name = project_name("app");
+        let spec = fullstack_spec(Backend::Axum, Frontend::Leptos);
+        let plan = template_plan(&spec, &name).expect("plan");
+        assert_eq!(plan, vec![TemplateStep::root("web-leptos-axum", &name)]);
+
+        let spec = fullstack_spec(Backend::Actix, Frontend::Leptos);
+        let plan = template_plan(&spec, &name).expect("plan");
+        assert_eq!(plan, vec![TemplateStep::root("web-leptos-actix", &name)]);
+    }
+
+    #[test]
     fn yew_fullstack_plans_a_workspace() {
         let name = project_name("app");
         let spec = fullstack_spec(Backend::Axum, Frontend::Yew);
@@ -836,6 +848,26 @@ mod tests {
         assert!(gitignore.contains("/data"));
         let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
         assert!(main_rs.contains("db::open()"));
+    }
+
+    #[test]
+    fn leptos_fullstack_renders_crate_identifiers() {
+        // A hyphenated crate name needs its underscored form in Rust code.
+        let spec = fullstack_spec(Backend::Axum, Frontend::Leptos);
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("web-leptos-axum").expect("template");
+
+        render_test(&template, &spec, "my-app", tmp.path()).expect("render");
+
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("use my_app::app::*;"));
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        assert!(cargo_toml.contains("name = \"my-app\""));
+        let app_rs = fs::read_to_string(tmp.path().join("src/app.rs")).expect("read");
+        assert!(app_rs.contains("/pkg/my-app.css"));
+        // No database wiring for leptos yet.
+        assert!(!tmp.path().join("src/db.rs").exists());
+        assert!(!tmp.path().join(".env.example").exists());
     }
 
     #[test]
@@ -1329,6 +1361,22 @@ mod tests {
         insta::assert_snapshot!(snapshot_output(&fullstack_spec(
             Backend::Actix,
             Frontend::Yew
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_axum_fullstack_leptos() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec(
+            Backend::Axum,
+            Frontend::Leptos
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_fullstack_leptos() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec(
+            Backend::Actix,
+            Frontend::Leptos
         )));
     }
 

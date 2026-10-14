@@ -1068,6 +1068,28 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_web_axum_sea_orm() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Axum,
+            Database::SeaORM,
+            Deployment::Docker,
+            vec![],
+            vec![],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_sea_orm() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Actix,
+            Database::SeaORM,
+            Deployment::Docker,
+            vec![],
+            vec![],
+        )));
+    }
+
+    #[test]
     fn snapshot_cli() {
         insta::assert_snapshot!(snapshot_output(&ProjectSpec::CliApp));
     }

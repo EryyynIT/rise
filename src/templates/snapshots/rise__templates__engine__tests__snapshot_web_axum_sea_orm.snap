@@ -1,0 +1,70 @@
+---
+source: src/templates/engine.rs
+expression: "snapshot_output(&backend_spec_full(Backend::Axum, Database::SeaORM,\nDeployment::Docker, vec![], vec![],))"
+---
+=== .env.example ===
+DATABASE_URL=postgres://postgres:postgres@localhost/sample_app
+
+=== .gitignore ===
+/target
+.env
+
+=== Cargo.toml ===
+[package]
+name = "sample-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+sea-orm = { version = "1", features = ["sqlx-postgres", "runtime-tokio-rustls"] }
+
+=== Dockerfile ===
+FROM rust:1-slim AS builder
+WORKDIR /app
+COPY . .
+RUN cargo build --release
+
+FROM debian:bookworm-slim
+COPY --from=builder /app/target/release/sample-app /usr/local/bin/app
+EXPOSE 3000
+CMD ["app"]
+
+=== src/db.rs ===
+//! Database connection (SeaORM + Postgres).
+
+use sea_orm::{Database, DatabaseConnection, DbErr};
+
+/// Connect to Postgres using the `DATABASE_URL` environment variable.
+///
+/// Copy `.env.example` to `.env` and adjust the URL for your database.
+/// Add entities under `src/entities/` and use the connection from your
+/// handlers to run queries.
+pub async fn connect() -> Result<DatabaseConnection, DbErr> {
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    Database::connect(&database_url).await
+}
+
+=== src/main.rs ===
+use axum::{Router, routing::get};
+
+mod db;
+
+#[tokio::main]
+async fn main() {
+    let app = Router::new().route("/", get(root));
+    let conn = db::connect().await.expect("failed to connect to database");
+    let app = app.with_state(conn);
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
+        .await
+        .expect("failed to bind port 3000");
+
+    println!("listening on http://localhost:3000");
+    axum::serve(listener, app).await.expect("server error");
+}
+
+async fn root() -> &'static str {
+    "Hello from sample-app!"
+}

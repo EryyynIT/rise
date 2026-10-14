@@ -20,7 +20,7 @@ use handlebars::Handlebars;
 use serde_json::json;
 use std::sync::LazyLock;
 {%- endif %}
-{%- if backend.database == 'sqlx' %}
+{%- if backend.database in ['sqlx', 'sea-orm'] %}
 
 mod db;
 {%- endif %}
@@ -165,6 +165,8 @@ async fn ws(
 async fn main() -> std::io::Result<()> {
 {%- if backend.database == 'sqlx' %}
     let pool = db::create_pool().await.expect("failed to connect to database");
+{%- elif backend.database == 'sea-orm' %}
+    let conn = db::connect().await.expect("failed to connect to database");
 {%- endif %}
     println!("listening on http://localhost:3000");
     HttpServer::new(move || {
@@ -178,6 +180,8 @@ async fn main() -> std::io::Result<()> {
 {%- endif %}
 {%- if backend.database == 'sqlx' %}
         app.app_data(actix_web::web::Data::new(pool.clone()))
+{%- elif backend.database == 'sea-orm' %}
+        app.app_data(actix_web::web::Data::new(conn.clone()))
 {%- else %}
         app
 {%- endif %}

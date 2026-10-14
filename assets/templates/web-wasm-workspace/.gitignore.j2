@@ -1,5 +1,5 @@
 /target
 **/dist
-{%- if backend and backend.database == 'sqlx' %}
+{%- if backend and backend.database in ['sqlx', 'sea-orm'] %}
 .env
 {%- endif %}

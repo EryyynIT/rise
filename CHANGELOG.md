@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-14
+
 ### Added
 
 - `cli` template: `--kind cli` generates a command-line scaffold on clap
@@ -66,5 +68,6 @@ First published release. The package is `rise-cli`; the binary is `rise`.
 - `git init` in the generated project and next-steps hints after generation.
 - Typed errors with clear messages; exit code 130 on abort (Esc/Ctrl+C).
 
-[Unreleased]: https://github.com/EryyynIT/rise/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/EryyynIT/rise/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/EryyynIT/rise/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/EryyynIT/rise/releases/tag/v0.1.0

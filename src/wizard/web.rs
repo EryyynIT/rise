@@ -250,10 +250,11 @@ fn fill_multi<T>(
 fn frontend_options(has_backend: bool) -> Vec<Frontend> {
     use Frontend::*;
     // Yew works both ways: a standalone trunk SPA or on top of a backend.
-    // Leptos is offered both ways too, but generates only with a backend.
-    let mut options = vec![Svelte, React, Vue, Minijinja, Handlebars, Yew, Leptos];
+    // Leptos generates only with a backend, so it is offered only there —
+    // a frontend-only Leptos run would dead-end at generation.
+    let mut options = vec![Svelte, React, Vue, Minijinja, Handlebars, Yew];
     let specific: &[Frontend] = if has_backend {
-        &[Tera, Askama]
+        &[Leptos, Tera, Askama]
     } else {
         &[Seed, Sauron]
     };
@@ -277,7 +278,9 @@ mod tests {
     #[test]
     fn frontend_options_without_backend() {
         let options = frontend_options(false);
-        assert!(options.contains(&Frontend::Leptos));
+        // Leptos generates only with a backend; offering it frontend-only
+        // would dead-end the wizard at generation.
+        assert!(!options.contains(&Frontend::Leptos));
         assert!(options.contains(&Frontend::Handlebars));
         assert!(options.contains(&Frontend::Yew));
     }

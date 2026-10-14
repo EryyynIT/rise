@@ -64,10 +64,13 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
         _ => None,
     };
     if let Some(backend) = backend {
-        if backend.database == Database::SQLx {
-            let dir = if fullstack_wasm { "backend/" } else { "" };
-            println!("  cp {dir}.env.example {dir}.env  # set DATABASE_URL");
-        }
+        let dir = if fullstack_wasm { "backend/" } else { "" };
+        let var = if backend.database == Database::Sled {
+            "DB_PATH"
+        } else {
+            "DATABASE_URL"
+        };
+        println!("  cp {dir}.env.example {dir}.env  # set {var}");
     }
     if wasm_frontend {
         println!(

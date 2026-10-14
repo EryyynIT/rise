@@ -33,7 +33,7 @@ internal = true
 # output path (after .j2 is stripped) => minijinja expression;
 # the file is skipped when the expression evaluates to true
 Dockerfile = "backend.deployment != 'docker'"
-"src/db.rs" = "backend.database != 'sqlx'"
+"templates/index.hbs" = "frontend != 'handlebars'"
 ```
 
 Unknown manifest fields are rejected, so typos fail loudly.

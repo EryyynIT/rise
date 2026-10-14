@@ -54,6 +54,21 @@ fn template_id(spec: &ProjectSpec) -> Result<&'static str> {
         ProjectSpec::WebApp(WebAppSpec::Frontend(_)) => {
             Err(Error::TemplateNotFound("web-frontend".into()))
         }
+        // A fullstack app with a template engine is the backend template
+        // plus server-side rendering; the `frontend` context field drives
+        // the engine-specific blocks.
+        ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack))
+            if fullstack.frontend.is_template_engine() =>
+        {
+            match fullstack.backend.backend {
+                Backend::Axum => Ok("web-axum"),
+                Backend::Actix => Ok("web-actix"),
+                other => Err(Error::TemplateNotFound(format!(
+                    "web-{}",
+                    other.to_string().to_lowercase()
+                ))),
+            }
+        }
         ProjectSpec::WebApp(WebAppSpec::Fullstack(_)) => {
             Err(Error::TemplateNotFound("web-fullstack".into()))
         }
@@ -203,7 +218,7 @@ fn safe_join(target: &Path, rel: &str) -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::spec::{BackendSpec, Database, Deployment, Feature, Testing};
+    use crate::spec::{BackendSpec, Database, Deployment, Feature, FullstackSpec, Testing};
 
     fn backend_spec(backend: Backend, deployment: Deployment) -> ProjectSpec {
         backend_spec_full(backend, Database::SQLx, deployment, vec![], vec![])
@@ -222,6 +237,19 @@ mod tests {
             deployment,
             testing,
             features,
+        }))
+    }
+
+    fn fullstack_spec(backend: Backend, frontend: Frontend) -> ProjectSpec {
+        ProjectSpec::WebApp(WebAppSpec::Fullstack(FullstackSpec {
+            frontend,
+            backend: BackendSpec {
+                backend,
+                database: Database::SQLx,
+                deployment: Deployment::Docker,
+                testing: vec![],
+                features: vec![],
+            },
         }))
     }
 
@@ -261,6 +289,22 @@ mod tests {
 
         let err = template_id(&ProjectSpec::Embedded).expect_err("no embedded template yet");
         assert!(matches!(err, Error::TemplateNotFound(id) if id == "embedded"));
+    }
+
+    #[test]
+    fn fullstack_with_template_engine_maps_to_the_backend_template() {
+        let spec = fullstack_spec(Backend::Axum, Frontend::Askama);
+        assert_eq!(template_id(&spec).expect("template id"), "web-axum");
+
+        let spec = fullstack_spec(Backend::Actix, Frontend::Tera);
+        assert_eq!(template_id(&spec).expect("template id"), "web-actix");
+    }
+
+    #[test]
+    fn fullstack_with_wasm_frontend_is_template_not_found() {
+        let spec = fullstack_spec(Backend::Axum, Frontend::Yew);
+        let err = template_id(&spec).expect_err("no yew fullstack template yet");
+        assert!(matches!(err, Error::TemplateNotFound(id) if id == "web-fullstack"));
     }
 
     #[test]
@@ -591,6 +635,70 @@ mod tests {
         assert!(!main_rs.contains("/ws"));
     }
 
+    // --- Fullstack with a server-side template engine ---
+
+    #[test]
+    fn axum_askama_fullstack_renders_template_at_compile_time() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let spec = fullstack_spec(Backend::Axum, Frontend::Askama);
+        let template = Template::embedded("web-axum").expect("template");
+
+        render_into(&template, &spec, "app", tmp.path()).expect("render");
+
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        assert!(cargo_toml.contains("askama"));
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("IndexTemplate"));
+        assert!(main_rs.contains("mod db;"));
+        assert!(tmp.path().join("templates/index.html").exists());
+        assert!(!tmp.path().join("templates/index.hbs").exists());
+    }
+
+    #[test]
+    fn axum_handlebars_fullstack_uses_hbs_templates() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let spec = fullstack_spec(Backend::Axum, Frontend::Handlebars);
+        let template = Template::embedded("web-axum").expect("template");
+
+        render_into(&template, &spec, "app", tmp.path()).expect("render");
+
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        assert!(cargo_toml.contains("handlebars"));
+        assert!(cargo_toml.contains("serde_json"));
+        assert!(tmp.path().join("templates/index.hbs").exists());
+        assert!(!tmp.path().join("templates/index.html").exists());
+    }
+
+    #[test]
+    fn actix_tera_fullstack_embeds_templates() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let spec = fullstack_spec(Backend::Actix, Frontend::Tera);
+        let template = Template::embedded("web-actix").expect("template");
+
+        render_into(&template, &spec, "app", tmp.path()).expect("render");
+
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        assert!(cargo_toml.contains("tera"));
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("TEMPLATES"));
+        assert!(main_rs.contains("add_raw_template"));
+        assert!(tmp.path().join("templates/index.html").exists());
+    }
+
+    #[test]
+    fn actix_minijinja_fullstack_renders_with_context_macro() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let spec = fullstack_spec(Backend::Actix, Frontend::Minijinja);
+        let template = Template::embedded("web-actix").expect("template");
+
+        render_into(&template, &spec, "app", tmp.path()).expect("render");
+
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        assert!(cargo_toml.contains("minijinja"));
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("context!"));
+    }
+
     // --- Output snapshots ---
     //
     // The whole generated tree as one deterministic string, snapshotted with
@@ -671,6 +779,70 @@ mod tests {
     #[test]
     fn snapshot_library() {
         insta::assert_snapshot!(snapshot_output(&ProjectSpec::Library));
+    }
+
+    #[test]
+    fn snapshot_web_axum_fullstack_askama() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec(
+            Backend::Axum,
+            Frontend::Askama
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_axum_fullstack_tera() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec(
+            Backend::Axum,
+            Frontend::Tera
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_axum_fullstack_minijinja() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec(
+            Backend::Axum,
+            Frontend::Minijinja
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_axum_fullstack_handlebars() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec(
+            Backend::Axum,
+            Frontend::Handlebars
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_fullstack_askama() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec(
+            Backend::Actix,
+            Frontend::Askama
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_fullstack_tera() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec(
+            Backend::Actix,
+            Frontend::Tera
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_fullstack_minijinja() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec(
+            Backend::Actix,
+            Frontend::Minijinja
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_fullstack_handlebars() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec(
+            Backend::Actix,
+            Frontend::Handlebars
+        )));
     }
 
     /// Render `spec` into a tempdir and return every generated file as one

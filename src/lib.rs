@@ -48,7 +48,12 @@ fn run_new(args: NewArgs) -> Result<(), Error> {
         _ => "cargo run",
     };
     println!("\nnext steps:\n  cd {name}");
-    if let ProjectSpec::WebApp(WebAppSpec::Backend(backend)) = &spec {
+    let backend = match &spec {
+        ProjectSpec::WebApp(WebAppSpec::Backend(backend)) => Some(backend),
+        ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack)) => Some(&fullstack.backend),
+        _ => None,
+    };
+    if let Some(backend) = backend {
         if backend.database == Database::SQLx {
             println!("  cp .env.example .env  # set DATABASE_URL");
         }

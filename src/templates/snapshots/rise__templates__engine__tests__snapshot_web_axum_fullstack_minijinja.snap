@@ -1,0 +1,109 @@
+---
+source: src/templates/engine.rs
+expression: "snapshot_output(&fullstack_spec(Backend::Axum, Frontend::Minijinja))"
+---
+=== .env.example ===
+DATABASE_URL=postgres://postgres:postgres@localhost/sample_app
+
+=== .gitignore ===
+/target
+.env
+
+=== Cargo.toml ===
+[package]
+name = "sample-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+minijinja = "3"
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }
+
+=== Dockerfile ===
+FROM rust:1-slim AS builder
+WORKDIR /app
+COPY . .
+RUN cargo build --release
+
+FROM debian:bookworm-slim
+COPY --from=builder /app/target/release/sample-app /usr/local/bin/app
+EXPOSE 3000
+CMD ["app"]
+
+=== src/db.rs ===
+//! Database connection pool (sqlx + Postgres).
+
+use sqlx::{PgPool, postgres::PgPoolOptions};
+
+/// Build a connection pool from the `DATABASE_URL` environment variable.
+///
+/// Copy `.env.example` to `.env` and adjust the URL for your database.
+/// Queries use sqlx's runtime-checked API, so the project compiles without
+/// a live database; `DATABASE_URL` is only needed at run time.
+pub async fn create_pool() -> Result<PgPool, sqlx::Error> {
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&database_url)
+        .await
+}
+
+=== src/main.rs ===
+use axum::{Router, routing::get};
+use axum::{
+    http::StatusCode,
+    response::Html,
+};
+use minijinja::{Environment, context};
+use std::sync::LazyLock;
+
+mod db;
+
+#[tokio::main]
+async fn main() {
+    let app = Router::new().route("/", get(root));
+    let pool = db::create_pool().await.expect("failed to connect to database");
+    let app = app.with_state(pool);
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
+        .await
+        .expect("failed to bind port 3000");
+
+    println!("listening on http://localhost:3000");
+    axum::serve(listener, app).await.expect("server error");
+}
+
+/// Templates are embedded into the binary, so the app runs from any
+/// working directory (including the slim Docker image).
+static TEMPLATES: LazyLock<Environment<'static>> = LazyLock::new(|| {
+    let mut env = Environment::new();
+    env.add_template("index.html", include_str!("../templates/index.html"))
+        .expect("failed to compile template");
+    env
+});
+
+async fn root() -> Result<Html<String>, (StatusCode, String)> {
+    let template = TEMPLATES.get_template("index.html").map_err(internal_error)?;
+    template
+        .render(context! { name => "sample-app" })
+        .map(Html)
+        .map_err(internal_error)
+}
+
+fn internal_error(err: impl std::fmt::Display) -> (StatusCode, String) {
+    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+}
+
+=== templates/index.html ===
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>rise app</title>
+</head>
+<body>
+    <h1>Hello from {{ name }}!</h1>
+</body>
+</html>

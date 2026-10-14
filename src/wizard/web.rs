@@ -53,7 +53,7 @@ pub(crate) fn complete(flags: WebFlags, mode: Interaction) -> Result<WebAppSpec>
                 testing,
                 features,
             };
-            let backend = complete_backend(backend, draft, mode)?;
+            let backend = complete_backend(backend, draft, frontend, mode)?;
             Ok(match frontend {
                 None => WebAppSpec::Backend(backend),
                 Some(frontend) => WebAppSpec::Fullstack(FullstackSpec { frontend, backend }),
@@ -89,7 +89,7 @@ fn prompt_full() -> Result<WebAppSpec> {
     match select("Select a webapp kind", WebAppKind::iter().collect())? {
         WebAppKind::Backend => {
             let backend = select("Select a backend", Backend::iter().collect())?;
-            Ok(WebAppSpec::Backend(prompt_backend(backend)?))
+            Ok(WebAppSpec::Backend(prompt_backend(backend, None)?))
         }
         WebAppKind::Frontend => {
             let frontend = select("Select a frontend tech", frontend_options(false))?;
@@ -110,19 +110,34 @@ fn prompt_full() -> Result<WebAppSpec> {
         WebAppKind::Fullstack => {
             let backend = select("Select a backend", Backend::iter().collect())?;
             let frontend = select("Select a frontend tech", frontend_options(true))?;
-            let backend = prompt_backend(backend)?;
+            let backend = prompt_backend(backend, Some(frontend))?;
             Ok(WebAppSpec::Fullstack(FullstackSpec { frontend, backend }))
         }
     }
 }
 
 /// Ask all backend questions, shared by backend-only and fullstack apps.
-fn prompt_backend(backend: Backend) -> Result<BackendSpec> {
-    let database = select("Select a database", Database::iter().collect())?;
+///
+/// A Leptos fullstack app talks to its backend through server functions;
+/// the database/testing/features wiring of the REST templates does not
+/// apply to it yet, so those questions are skipped (deployment stays —
+/// it drives the Dockerfile).
+fn prompt_backend(backend: Backend, frontend: Option<Frontend>) -> Result<BackendSpec> {
+    let leptos = frontend == Some(Frontend::Leptos);
+    let database = match leptos {
+        true => None,
+        false => Some(select("Select a database", Database::iter().collect())?),
+    };
     let deployment = select("Select a deployment option", Deployment::iter().collect())?;
-    let testing = multi_select("Select testing options", Testing::iter().collect())?;
-    let features = multi_select("Select features", implemented_features())?;
-    validate_features(&features)?;
+    let (testing, features) = match leptos {
+        true => (Vec::new(), Vec::new()),
+        false => {
+            let testing = multi_select("Select testing options", Testing::iter().collect())?;
+            let features = multi_select("Select features", implemented_features())?;
+            validate_features(&features)?;
+            (testing, features)
+        }
+    };
     Ok(BackendSpec {
         backend,
         database,
@@ -133,24 +148,39 @@ fn prompt_backend(backend: Backend) -> Result<BackendSpec> {
 }
 
 /// Complete the backend spec, asking only for what the flags left open.
+///
+/// For a Leptos frontend the database/testing/features questions are
+/// skipped like in [`prompt_backend`]; flag validation has already
+/// rejected those flags, so the draft fields are guaranteed to be unset.
 fn complete_backend(
     backend: Backend,
     draft: BackendDraft,
+    frontend: Option<Frontend>,
     mode: Interaction,
 ) -> Result<BackendSpec> {
-    let database = fill(draft.database, mode, "`--db`", || {
-        select("Select a database", Database::iter().collect())
-    })?;
+    let leptos = frontend == Some(Frontend::Leptos);
+    let database = match leptos {
+        true => None,
+        false => Some(fill(draft.database, mode, "`--db`", || {
+            select("Select a database", Database::iter().collect())
+        })?),
+    };
     let deployment = fill(draft.deployment, mode, "`--deployment`", || {
         select("Select a deployment option", Deployment::iter().collect())
     })?;
-    let testing = fill_multi(draft.testing, mode, || {
-        multi_select("Select testing options", Testing::iter().collect())
-    })?;
-    let features = fill_multi(draft.features, mode, || {
-        multi_select("Select features", implemented_features())
-    })?;
-    validate_features(&features)?;
+    let (testing, features) = match leptos {
+        true => (Vec::new(), Vec::new()),
+        false => {
+            let testing = fill_multi(draft.testing, mode, || {
+                multi_select("Select testing options", Testing::iter().collect())
+            })?;
+            let features = fill_multi(draft.features, mode, || {
+                multi_select("Select features", implemented_features())
+            })?;
+            validate_features(&features)?;
+            (testing, features)
+        }
+    };
     Ok(BackendSpec {
         backend,
         database,
@@ -220,11 +250,12 @@ fn fill_multi<T>(
 fn frontend_options(has_backend: bool) -> Vec<Frontend> {
     use Frontend::*;
     // Yew works both ways: a standalone trunk SPA or on top of a backend.
-    let mut options = vec![Svelte, React, Vue, Minijinja, Handlebars, Yew];
+    // Leptos is offered both ways too, but generates only with a backend.
+    let mut options = vec![Svelte, React, Vue, Minijinja, Handlebars, Yew, Leptos];
     let specific: &[Frontend] = if has_backend {
         &[Tera, Askama]
     } else {
-        &[Leptos, Seed, Sauron]
+        &[Seed, Sauron]
     };
     options.extend_from_slice(specific);
     options
@@ -239,7 +270,8 @@ mod tests {
         let options = frontend_options(true);
         assert!(options.contains(&Frontend::Yew));
         assert!(options.contains(&Frontend::Minijinja));
-        assert!(!options.contains(&Frontend::Leptos));
+        assert!(options.contains(&Frontend::Leptos));
+        assert!(!options.contains(&Frontend::Seed));
     }
 
     #[test]

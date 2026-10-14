@@ -15,7 +15,7 @@ use strum::IntoEnumIterator;
 use crate::cli::{NewArgs, WebFlags};
 use crate::error::{Error, Result};
 use crate::name::ProjectName;
-use crate::spec::{Database, ProjectKind, ProjectSpec, Testing};
+use crate::spec::{Database, Frontend, ProjectKind, ProjectSpec, Testing};
 use crate::wizard::render::render_cfg;
 
 /// Whether the wizard may ask questions.
@@ -90,6 +90,18 @@ fn validate_flags(args: &NewArgs) -> Result<()> {
             }
             _ => {}
         }
+    }
+
+    // A Leptos fullstack app gets no database/testing/features wiring yet:
+    // it talks to the backend through server functions, not the REST stack
+    // those options configure. Reject the flags instead of ignoring them.
+    if web.frontend == Some(Frontend::Leptos)
+        && (web.database.is_some() || web.testing.is_some() || web.features.is_some())
+    {
+        return Err(Error::ConflictingOptions(
+            "`--db`, `--testing` and `--features` are not supported with a leptos frontend yet"
+                .into(),
+        ));
     }
 
     // sqlx-based tests need the sqlx database stack they exercise.

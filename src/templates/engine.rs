@@ -181,6 +181,24 @@ fn template_plan(spec: &ProjectSpec, name: &ProjectName) -> Result<Vec<TemplateS
                 TemplateStep::member("frontend-yew", "frontend", name, "frontend"),
             ])
         }
+        // A Leptos fullstack app is a single crate again: leptos_axum /
+        // leptos_actix integrate the frontend into the backend, and
+        // cargo-leptos builds both targets from one manifest.
+        ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack))
+            if fullstack.frontend == Frontend::Leptos =>
+        {
+            let id = match fullstack.backend.backend {
+                Backend::Axum => "web-leptos-axum",
+                Backend::Actix => "web-leptos-actix",
+                other => {
+                    return Err(Error::TemplateNotFound(format!(
+                        "web-leptos-{}",
+                        other.to_string().to_lowercase()
+                    )));
+                }
+            };
+            Ok(vec![TemplateStep::root(id, name)])
+        }
         ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack)) => {
             Err(Error::TemplateNotFound(format!(
                 "web-fullstack-{}",
@@ -208,12 +226,16 @@ fn template_plan(spec: &ProjectSpec, name: &ProjectName) -> Result<Vec<TemplateS
 /// `crate_name` equals `name` for a single-crate project; multi-crate
 /// plans (workspaces) give each step its own crate name, so `Cargo.toml`
 /// and binary paths must use `crate_name`, prose should use `name`.
-/// `workspace` tells member templates that a root template already
-/// provides project-level files (`.gitignore`, Dockerfile).
+/// `crate_ident` is `crate_name` with `-` replaced by `_` — the identifier
+/// Rust code uses to refer to the crate (`use my_app::...`), since hyphens
+/// are not valid in Rust identifiers. `workspace` tells member templates
+/// that a root template already provides project-level files (`.gitignore`,
+/// Dockerfile).
 #[derive(Serialize)]
 struct RenderContext<'a> {
     name: &'a str,
     crate_name: &'a str,
+    crate_ident: String,
     spec: &'a ProjectSpec,
     backend: Option<&'a BackendSpec>,
     frontend: Option<Frontend>,
@@ -240,6 +262,7 @@ impl<'a> RenderContext<'a> {
         Self {
             name,
             crate_name,
+            crate_ident: crate_name.replace('-', "_"),
             spec,
             backend,
             frontend,
@@ -393,7 +416,7 @@ mod tests {
     ) -> ProjectSpec {
         ProjectSpec::WebApp(WebAppSpec::Backend(BackendSpec {
             backend,
-            database,
+            database: Some(database),
             deployment,
             testing,
             features,
@@ -401,11 +424,16 @@ mod tests {
     }
 
     fn fullstack_spec(backend: Backend, frontend: Frontend) -> ProjectSpec {
+        let database = match frontend {
+            // Leptos fullstack specs carry no database (see wizard).
+            Frontend::Leptos => None,
+            _ => Some(Database::SQLx),
+        };
         ProjectSpec::WebApp(WebAppSpec::Fullstack(FullstackSpec {
             frontend,
             backend: BackendSpec {
                 backend,
-                database: Database::SQLx,
+                database,
                 deployment: Deployment::Docker,
                 testing: vec![],
                 features: vec![],
@@ -425,7 +453,7 @@ mod tests {
             frontend,
             backend: BackendSpec {
                 backend,
-                database: Database::SQLx,
+                database: Some(Database::SQLx),
                 deployment: Deployment::Docker,
                 testing: vec![Testing::Api],
                 features: vec![],
@@ -521,9 +549,14 @@ mod tests {
     #[test]
     fn other_fullstack_wasm_frontends_are_template_not_found() {
         let name = project_name("app");
-        let spec = fullstack_spec(Backend::Axum, Frontend::Leptos);
-        let err = template_plan(&spec, &name).expect_err("no leptos fullstack template yet");
-        assert!(matches!(err, Error::TemplateNotFound(id) if id == "web-fullstack-leptos"));
+        let spec = fullstack_spec(Backend::Axum, Frontend::Seed);
+        let err = template_plan(&spec, &name).expect_err("no seed fullstack template yet");
+        assert!(matches!(err, Error::TemplateNotFound(id) if id == "web-fullstack-seed"));
+
+        // Leptos integrates with axum and actix only.
+        let spec = fullstack_spec(Backend::Rocket, Frontend::Leptos);
+        let err = template_plan(&spec, &name).expect_err("no rocket leptos template yet");
+        assert!(matches!(err, Error::TemplateNotFound(id) if id == "web-leptos-rocket"));
     }
 
     #[test]
@@ -759,7 +792,7 @@ mod tests {
     fn diesel_wires_a_connection_pool() {
         let spec = ProjectSpec::WebApp(WebAppSpec::Backend(BackendSpec {
             backend: Backend::Axum,
-            database: Database::Diesel,
+            database: Some(Database::Diesel),
             deployment: Deployment::Docker,
             testing: vec![],
             features: vec![],
@@ -786,7 +819,7 @@ mod tests {
     fn sled_opens_an_embedded_store() {
         let spec = ProjectSpec::WebApp(WebAppSpec::Backend(BackendSpec {
             backend: Backend::Axum,
-            database: Database::Sled,
+            database: Some(Database::Sled),
             deployment: Deployment::SelfHosted,
             testing: vec![],
             features: vec![],

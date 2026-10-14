@@ -284,7 +284,15 @@ Dockerfile = "spec.WebApp.Backend.deployment != 'docker'"
         let names: Vec<&str> = manifests.iter().map(|m| m.name.as_str()).collect();
         assert_eq!(
             names,
-            ["cli", "frontend-yew", "library", "web-actix", "web-axum"]
+            [
+                "cli",
+                "frontend-yew",
+                "library",
+                "web-actix",
+                "web-axum",
+                "web-leptos-actix",
+                "web-leptos-axum"
+            ]
         );
     }
 

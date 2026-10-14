@@ -594,11 +594,11 @@ fn fullstack_with_other_wasm_frontends_is_an_actionable_error() {
         .expect("binary")
         .args([
             "new",
-            "leptos-app",
+            "seed-app",
             "--backend",
             "axum",
             "--frontend",
-            "leptos",
+            "seed",
             "--db",
             "sqlx",
             "--deployment",
@@ -607,7 +607,7 @@ fn fullstack_with_other_wasm_frontends_is_an_actionable_error() {
         ])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("web-fullstack-leptos"));
+        .stderr(predicate::str::contains("web-fullstack-seed"));
 }
 
 #[test]

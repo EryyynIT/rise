@@ -57,15 +57,18 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
     };
     let fullstack_wasm =
         wasm_frontend && matches!(&spec, ProjectSpec::WebApp(WebAppSpec::Fullstack(_)));
+    let leptos_fullstack = matches!(&spec, ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack))
+        if fullstack.frontend == Frontend::Leptos);
     println!("\nnext steps:\n  cd {name}");
     let backend = match &spec {
         ProjectSpec::WebApp(WebAppSpec::Backend(backend)) => Some(backend),
         ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack)) => Some(&fullstack.backend),
         _ => None,
     };
-    if let Some(backend) = backend {
+    // Leptos fullstack apps ship no .env.example (no database wiring yet).
+    if let Some(database) = backend.and_then(|backend| backend.database) {
         let dir = if fullstack_wasm { "backend/" } else { "" };
-        let var = if backend.database == Database::Sled {
+        let var = if database == Database::Sled {
             "DB_PATH"
         } else {
             "DATABASE_URL"
@@ -77,6 +80,11 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
             "  rustup target add wasm32-unknown-unknown && cargo install trunk  # one-time setup"
         );
     }
+    if leptos_fullstack {
+        println!(
+            "  rustup target add wasm32-unknown-unknown && cargo install --locked cargo-leptos  # one-time setup"
+        );
+    }
     match &spec {
         ProjectSpec::Library => println!("  cargo test"),
         _ if fullstack_wasm => {
@@ -84,6 +92,7 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
             println!("  cd frontend && trunk serve   # terminal 2: SPA on :8080");
         }
         _ if wasm_frontend => println!("  trunk serve"),
+        _ if leptos_fullstack => println!("  cargo leptos watch"),
         _ => println!("  cargo run"),
     }
     Ok(())

@@ -52,7 +52,7 @@ Selection for:
 - More, you're free to give more ideas!
 
 Generation for:
--[/] WebApps (backend-only: Axum and Actix Web — sqlx pool, tests and WebSockets wired from your choices)
+-[/] WebApps (backend-only Axum and Actix Web — sqlx pool, tests and WebSockets wired from your choices — plus fullstack with Askama, Tera, Minijinja or Handlebars)
 -[x] CLI
 -[] Gamedev
 -[] Embedded

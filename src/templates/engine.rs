@@ -105,17 +105,23 @@ fn template_id(spec: &ProjectSpec) -> Result<&'static str> {
     }
 }
 
-/// Variables available to every template: the project name, the full spec,
-/// and the web stacks flattened out of the spec's enum nesting.
+/// Variables available to every template: the project name, the crate name
+/// of the package being rendered, the full spec, and the web stacks
+/// flattened out of the spec's enum nesting.
 ///
 /// Templates use `backend`/`frontend` rather than digging into
 /// `spec.WebApp.Backend` vs `spec.WebApp.Fullstack.backend`: strict
 /// undefined behavior makes spec access shape-dependent, the flattened
 /// fields are not. `None` serializes as a minijinja `none`, so
 /// `{% if backend %}` guards every access.
+///
+/// `crate_name` equals `name` for a single-crate project; multi-crate
+/// plans (workspaces) give each step its own crate name, so `Cargo.toml`
+/// and binary paths must use `crate_name`, prose should use `name`.
 #[derive(Serialize)]
 struct RenderContext<'a> {
     name: &'a str,
+    crate_name: &'a str,
     spec: &'a ProjectSpec,
     backend: Option<&'a BackendSpec>,
     frontend: Option<Frontend>,
@@ -133,6 +139,7 @@ impl<'a> RenderContext<'a> {
         };
         Self {
             name,
+            crate_name: name,
             spec,
             backend,
             frontend,

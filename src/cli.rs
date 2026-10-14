@@ -23,6 +23,12 @@ pub(crate) enum Command {
     New(NewArgs),
     /// List the available project templates.
     List,
+    /// Print a shell completion script to stdout.
+    Completions {
+        /// The shell to generate completions for.
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
+    },
 }
 
 /// `rise new` arguments. Every option the flags leave out is asked

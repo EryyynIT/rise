@@ -29,6 +29,10 @@ pub use error::Error;
 pub fn run(cli: Cli) -> Result<(), Error> {
     match cli.command {
         Some(Command::List) => list_templates(),
+        Some(Command::Completions { shell }) => {
+            print_completions(shell);
+            Ok(())
+        }
         Some(Command::New(args)) => run_new(args),
         None => run_new(NewArgs::default()),
     }
@@ -84,6 +88,16 @@ fn list_templates() -> Result<(), Error> {
         println!("  {} — {}", manifest.name, manifest.description);
     }
     Ok(())
+}
+
+/// `rise completions <shell>`: print the completion script to stdout, for
+/// the user to source or save into their shell's completion directory.
+fn print_completions(shell: clap_complete::Shell) {
+    use clap::CommandFactory;
+    let mut command = Cli::command();
+    // The package is `rise-cli`, but the installed binary is `rise`;
+    // completions must register for the binary name.
+    clap_complete::generate(shell, &mut command, "rise", &mut std::io::stdout());
 }
 
 /// The rise banner: crab, name, tagline.

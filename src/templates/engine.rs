@@ -756,7 +756,7 @@ mod tests {
     }
 
     #[test]
-    fn non_sqlx_database_adds_only_the_dependency() {
+    fn diesel_wires_a_connection_pool() {
         let spec = ProjectSpec::WebApp(WebAppSpec::Backend(BackendSpec {
             backend: Backend::Axum,
             database: Database::Diesel,
@@ -769,13 +769,17 @@ mod tests {
 
         render_test(&template, &spec, "app", tmp.path()).expect("render");
 
-        assert!(!tmp.path().join("src/db.rs").exists());
-        assert!(!tmp.path().join(".env.example").exists());
+        assert!(tmp.path().join("src/db.rs").exists());
+        assert!(tmp.path().join(".env.example").exists());
         let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
         assert!(cargo_toml.contains("diesel"));
+        assert!(cargo_toml.contains("r2d2"));
         assert!(!cargo_toml.contains("sqlx"));
         let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
-        assert!(!main_rs.contains("mod db"));
+        assert!(main_rs.contains("mod db"));
+        assert!(main_rs.contains("db::create_pool()"));
+        let dockerfile = fs::read_to_string(tmp.path().join("Dockerfile")).expect("read");
+        assert!(dockerfile.contains("libpq"));
     }
 
     #[test]
@@ -1057,11 +1061,22 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_web_axum_diesel_deps_only() {
+    fn snapshot_web_axum_diesel() {
         insta::assert_snapshot!(snapshot_output(&backend_spec_full(
             Backend::Axum,
             Database::Diesel,
             Deployment::Kubernetes,
+            vec![],
+            vec![],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_diesel() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Actix,
+            Database::Diesel,
+            Deployment::Docker,
             vec![],
             vec![],
         )));

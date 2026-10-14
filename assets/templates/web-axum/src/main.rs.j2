@@ -27,7 +27,7 @@ use handlebars::Handlebars;
 use serde_json::json;
 use std::sync::LazyLock;
 {%- endif %}
-{%- if backend.database in ['sqlx', 'sea-orm'] %}
+{%- if backend.database != 'sled' %}
 
 mod db;
 {%- endif %}
@@ -48,6 +48,9 @@ async fn main() {
 {%- elif backend.database == 'sea-orm' %}
     let conn = db::connect().await.expect("failed to connect to database");
     let app = app.with_state(conn);
+{%- elif backend.database == 'diesel' %}
+    let pool = db::create_pool();
+    let app = app.with_state(pool);
 {%- endif %}
 {%- if frontend == 'yew' %}
     // Serve the WASM bundle built by trunk (`frontend/dist`) next to the API.

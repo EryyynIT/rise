@@ -1,0 +1,70 @@
+---
+source: src/templates/engine.rs
+expression: "snapshot_output(&backend_spec_full(Backend::Axum, Database::Diesel,\nDeployment::Kubernetes, vec![], vec![],))"
+---
+=== .env.example ===
+DATABASE_URL=postgres://postgres:postgres@localhost/sample_app
+
+=== .gitignore ===
+/target
+.env
+
+=== Cargo.toml ===
+[package]
+name = "sample-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+diesel = { version = "2", features = ["postgres", "r2d2"] }
+
+=== src/db.rs ===
+//! Database connection pool (Diesel + r2d2 + Postgres).
+
+use diesel::{
+    PgConnection,
+    r2d2::{ConnectionManager, Pool},
+};
+
+/// Synchronous Diesel connections, pooled for use from async handlers.
+pub type DbPool = Pool<ConnectionManager<PgConnection>>;
+
+/// Build the pool from the `DATABASE_URL` environment variable.
+///
+/// Copy `.env.example` to `.env` and adjust the URL for your database.
+/// The pool is lazy — it opens connections on first use — so the app
+/// starts without a live database. Diesel is a blocking ORM: run queries
+/// inside `tokio::task::spawn_blocking` (axum) or `web::block` (actix-web).
+pub fn create_pool() -> DbPool {
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let manager = ConnectionManager::<PgConnection>::new(database_url);
+    Pool::builder()
+        .max_size(5)
+        .build(manager)
+        .expect("failed to build the database pool")
+}
+
+=== src/main.rs ===
+use axum::{Router, routing::get};
+
+mod db;
+
+#[tokio::main]
+async fn main() {
+    let app = Router::new().route("/", get(root));
+    let pool = db::create_pool();
+    let app = app.with_state(pool);
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
+        .await
+        .expect("failed to bind port 3000");
+
+    println!("listening on http://localhost:3000");
+    axum::serve(listener, app).await.expect("server error");
+}
+
+async fn root() -> &'static str {
+    "Hello from sample-app!"
+}

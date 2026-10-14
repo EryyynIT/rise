@@ -29,4 +29,29 @@ pub async fn connect() -> Result<DatabaseConnection, DbErr> {
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     Database::connect(&database_url).await
 }
+{%- elif backend.database == 'diesel' -%}
+//! Database connection pool (Diesel + r2d2 + Postgres).
+
+use diesel::{
+    PgConnection,
+    r2d2::{ConnectionManager, Pool},
+};
+
+/// Synchronous Diesel connections, pooled for use from async handlers.
+pub type DbPool = Pool<ConnectionManager<PgConnection>>;
+
+/// Build the pool from the `DATABASE_URL` environment variable.
+///
+/// Copy `.env.example` to `.env` and adjust the URL for your database.
+/// The pool is lazy — it opens connections on first use — so the app
+/// starts without a live database. Diesel is a blocking ORM: run queries
+/// inside `tokio::task::spawn_blocking` (axum) or `web::block` (actix-web).
+pub fn create_pool() -> DbPool {
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let manager = ConnectionManager::<PgConnection>::new(database_url);
+    Pool::builder()
+        .max_size(5)
+        .build(manager)
+        .expect("failed to build the database pool")
+}
 {%- endif %}

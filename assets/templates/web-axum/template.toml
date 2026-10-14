@@ -9,8 +9,8 @@ description = "Axum + tokio backend, optionally with a server-side template engi
 # at the root.
 Dockerfile = "backend.deployment != 'docker' or workspace"
 ".gitignore" = "workspace"
-"src/db.rs" = "backend.database not in ['sqlx', 'sea-orm']"
-".env.example" = "backend.database not in ['sqlx', 'sea-orm']"
+"src/db.rs" = "backend.database == 'sled'"
+".env.example" = "backend.database == 'sled'"
 # Handlebars uses its own .hbs file; askama/tera/minijinja share index.html;
 # every other frontend (or none) ships neither.
 "templates/index.html" = "frontend not in ['askama', 'tera', 'minijinja']"

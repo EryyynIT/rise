@@ -9,12 +9,19 @@ RUN trunk build --release
 # is needed here).
 FROM rust:1-slim AS backend-builder
 WORKDIR /build
+{%- if backend.database == 'diesel' %}
+# Diesel links against libpq.
+RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev && rm -rf /var/lib/apt/lists/*
+{%- endif %}
 COPY . .
 COPY --from=frontend-builder /build/frontend/dist ./frontend/dist
 RUN cargo build --release -p {{ name }}-backend
 
 # Run: the backend serves the API and the frontend bundle.
 FROM debian:bookworm-slim
+{%- if backend.database == 'diesel' %}
+RUN apt-get update && apt-get install -y --no-install-recommends libpq5 && rm -rf /var/lib/apt/lists/*
+{%- endif %}
 WORKDIR /app
 COPY --from=backend-builder /build/target/release/{{ name }}-backend /usr/local/bin/app
 COPY --from=backend-builder /build/frontend/dist ./frontend/dist

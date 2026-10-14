@@ -1,4 +1,4 @@
 /target
-{%- if backend.database in ['sqlx', 'sea-orm'] %}
+{%- if backend.database != 'sled' %}
 .env
 {%- endif %}

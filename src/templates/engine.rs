@@ -11,7 +11,7 @@ use serde::Serialize;
 
 use crate::error::{Error, Result};
 use crate::name::ProjectName;
-use crate::spec::{Backend, ProjectSpec, WebAppSpec};
+use crate::spec::{Backend, BackendSpec, Frontend, ProjectSpec, WebAppSpec};
 use crate::templates::template::{RENDER_SUFFIX, Template, TemplateFile};
 
 /// Generate a project from a complete spec into `./<name>/`.
@@ -64,11 +64,39 @@ fn template_id(spec: &ProjectSpec) -> Result<&'static str> {
     }
 }
 
-/// Variables available to every template: the project name and the full spec.
+/// Variables available to every template: the project name, the full spec,
+/// and the web stacks flattened out of the spec's enum nesting.
+///
+/// Templates use `backend`/`frontend` rather than digging into
+/// `spec.WebApp.Backend` vs `spec.WebApp.Fullstack.backend`: strict
+/// undefined behavior makes spec access shape-dependent, the flattened
+/// fields are not. `None` serializes as a minijinja `none`, so
+/// `{% if backend %}` guards every access.
 #[derive(Serialize)]
 struct RenderContext<'a> {
     name: &'a str,
     spec: &'a ProjectSpec,
+    backend: Option<&'a BackendSpec>,
+    frontend: Option<Frontend>,
+}
+
+impl<'a> RenderContext<'a> {
+    fn new(name: &'a str, spec: &'a ProjectSpec) -> Self {
+        let (backend, frontend) = match spec {
+            ProjectSpec::WebApp(WebAppSpec::Backend(backend)) => (Some(backend), None),
+            ProjectSpec::WebApp(WebAppSpec::Frontend(frontend)) => (None, Some(frontend.frontend)),
+            ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack)) => {
+                (Some(&fullstack.backend), Some(fullstack.frontend))
+            }
+            _ => (None, None),
+        };
+        Self {
+            name,
+            spec,
+            backend,
+            frontend,
+        }
+    }
 }
 
 /// Ensure `target` is usable: nonexistent or an empty directory.
@@ -100,7 +128,7 @@ fn render_into(template: &Template, spec: &ProjectSpec, name: &str, target: &Pat
         .expect("default syntax config is valid");
     env.set_syntax(syntax);
 
-    let ctx = Value::from(Serde(RenderContext { name, spec }));
+    let ctx = Value::from(Serde(RenderContext::new(name, spec)));
     let excluded = excluded_paths(template, &env, &ctx)?;
 
     for file in template.files() {

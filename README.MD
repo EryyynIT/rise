@@ -53,10 +53,10 @@ Everything the wizard asks is also a flag on `rise new`:
 | `--kind` | `web`, `cli`, `library` | inferred as `web` when any web flag is passed |
 | `--backend` | `axum`, `actix` | alone → backend-only; with `--frontend` → fullstack |
 | `--frontend` | `yew`, `askama`, `tera`, `minijinja`, `handlebars` | `yew` → WASM SPA (alone) or workspace member (with a backend); the rest are server-side template engines |
-| `--db` | `sqlx`, `diesel`, `sea-orm`, `sled` | `sqlx` wires a pool + `.env.example`; the others add the dependency |
+| `--db` | `sqlx`, `diesel`, `sea-orm`, `sled` | wires a connection module + `.env.example` — sqlx pool, SeaORM connection, Diesel r2d2 pool, sled store |
 | `--deployment` | `docker`, `kubernetes`, `serverless`, `self-hosted` | `docker` ships a slim multi-stage Dockerfile |
 | `--testing` | `api`, `sqlx`, `mock` | repeatable, comma-separated; adds test modules and dev-dependencies |
-| `--features` | `web-sockets` | repeatable, comma-separated; adds a `/ws` echo endpoint |
+| `--features` | `web-sockets`, `graph-ql`, `rate-limiting` | repeatable, comma-separated; `/ws` echo endpoint, async-graphql with GraphiQL at `/graphql`, per-IP rate limiting |
 | `--template` | a template directory | render your own template — see [docs/TEMPLATES.md](docs/TEMPLATES.md) |
 | `--no-input` | | never prompt; a non-terminal stdin implies this |
 
@@ -107,7 +107,7 @@ Selection for:
 - More, you're free to give more ideas!
 
 Generation for:
--[/] WebApps (backend-only Axum and Actix Web — sqlx pool, tests and WebSockets wired from your choices — fullstack with Askama, Tera, Minijinja or Handlebars, and Yew WASM frontends: standalone trunk SPAs or a fullstack workspace)
+-[/] WebApps (backend-only Axum and Actix Web — database wiring, tests, WebSockets, GraphQL and rate limiting generated from your choices — fullstack with Askama, Tera, Minijinja or Handlebars, and Yew WASM frontends: standalone trunk SPAs or a fullstack workspace)
 -[x] CLI
 -[] Gamedev
 -[] Embedded

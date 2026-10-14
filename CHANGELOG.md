@@ -22,12 +22,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (shape-independent, unlike spec paths) and `workspace` (true for members
   of a multi-crate plan). Template manifests can set `internal = true` to
   stay out of `rise list`.
+- Every `--db` value now wires its database into the generated backend,
+  not just the dependency: SeaORM connects a `DatabaseConnection`, Diesel
+  builds an r2d2 pool (generated Dockerfiles install libpq for it) and
+  sled opens an embedded store from `DB_PATH`. All of them ship
+  `.env.example` and `.gitignore` entries like sqlx already did.
+- New implemented `--features`: `rate-limiting` (per-IP limiting via
+  tower-governor on axum, actix-governor on actix) and `graph-ql`
+  (async-graphql with a `hello` query, `POST /graphql` and the GraphiQL
+  IDE on `GET /graphql`). `grpc` stays rejected as not implemented — it
+  would require protoc at build time in generated projects.
 
 ### Changed
 
 - `TemplateNotFound` errors for unsupported frontends name the missing
   combination (`web-leptos`, `web-fullstack-leptos`, ...) instead of a
   generic `web-frontend`/`web-fullstack`.
+
+### Fixed
+
+- `Feature::GraphQL` serialized into the render context as `graph-q-l`
+  (heck splits the acronym); the serde name now matches the CLI spelling
+  `graph-ql`.
 
 ## [0.3.0] - 2026-10-14
 

@@ -750,7 +750,7 @@ mod tests {
         assert!(cargo_toml.contains("sqlx"));
         let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
         assert!(main_rs.contains("mod db;"));
-        assert!(main_rs.contains("with_state(pool)"));
+        assert!(main_rs.contains("with_state(db)"));
         let gitignore = fs::read_to_string(tmp.path().join(".gitignore")).expect("read");
         assert!(gitignore.contains(".env"));
     }
@@ -1146,6 +1146,28 @@ mod tests {
             Deployment::Docker,
             vec![],
             vec![Feature::RateLimiting],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_axum_graphql() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Axum,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![],
+            vec![Feature::GraphQL],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_graphql() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Actix,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![],
+            vec![Feature::GraphQL],
         )));
     }
 

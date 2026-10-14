@@ -157,6 +157,7 @@ pub enum Feature {
     #[serde(rename = "grpc")]
     #[value(name = "grpc")]
     gRPC,
+    #[serde(rename = "graph-ql")]
     GraphQL,
     RateLimiting,
 }

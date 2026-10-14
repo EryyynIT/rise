@@ -1,0 +1,108 @@
+---
+source: src/templates/engine.rs
+expression: "snapshot_output(&backend_spec_full(Backend::Actix, Database::SQLx,\nDeployment::Docker, vec![], vec![Feature::GraphQL],))"
+---
+=== .env.example ===
+DATABASE_URL=postgres://postgres:postgres@localhost/sample_app
+
+=== .gitignore ===
+/target
+.env
+
+=== Cargo.toml ===
+[package]
+name = "sample-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+actix-web = "4"
+async-graphql = "7"
+async-graphql-actix-web = "7"
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }
+
+=== Dockerfile ===
+FROM rust:1-slim AS builder
+WORKDIR /app
+COPY . .
+RUN cargo build --release
+
+FROM debian:bookworm-slim
+COPY --from=builder /app/target/release/sample-app /usr/local/bin/app
+EXPOSE 3000
+CMD ["app"]
+
+=== src/db.rs ===
+//! Database connection pool (sqlx + Postgres).
+
+use sqlx::{PgPool, postgres::PgPoolOptions};
+
+/// Build a connection pool from the `DATABASE_URL` environment variable.
+///
+/// Copy `.env.example` to `.env` and adjust the URL for your database.
+/// Queries use sqlx's runtime-checked API, so the project compiles without
+/// a live database; `DATABASE_URL` is only needed at run time.
+pub async fn create_pool() -> Result<PgPool, sqlx::Error> {
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&database_url)
+        .await
+}
+
+=== src/main.rs ===
+use actix_web::{App, HttpServer, Responder, get};
+use actix_web::{post, web};
+use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema, http::GraphiQLSource};
+use async_graphql_actix_web::{GraphQLRequest, GraphQLResponse};
+
+mod db;
+
+#[get("/")]
+async fn root() -> impl Responder {
+    "Hello from sample-app!"
+}
+
+/// The GraphQL schema: one `hello` field to get started.
+struct QueryRoot;
+
+#[Object]
+impl QueryRoot {
+    async fn hello(&self) -> &str {
+        "Hello from sample-app!"
+    }
+}
+
+type AppSchema = Schema<QueryRoot, EmptyMutation, EmptySubscription>;
+
+/// Interactive GraphQL IDE on GET /graphql.
+#[get("/graphql")]
+async fn graphiql() -> impl Responder {
+    actix_web::HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(GraphiQLSource::build().endpoint("/graphql").finish())
+}
+
+/// GraphQL endpoint on POST /graphql.
+#[post("/graphql")]
+async fn graphql(schema: web::Data<AppSchema>, request: GraphQLRequest) -> GraphQLResponse {
+    schema.execute(request.into_inner()).await.into()
+}
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    let pool = db::create_pool().await.expect("failed to connect to database");
+    let schema = Schema::build(QueryRoot, EmptyMutation, EmptySubscription).finish();
+    println!("listening on http://localhost:3000");
+    HttpServer::new(move || {
+        let app = App::new().service(root);
+        let app = app
+            .service(graphiql)
+            .service(graphql)
+            .app_data(actix_web::web::Data::new(schema.clone()));
+        app.app_data(actix_web::web::Data::new(pool.clone()))
+    })
+    .bind(("0.0.0.0", 3000))?
+    .run()
+    .await
+}

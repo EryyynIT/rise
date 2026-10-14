@@ -10,6 +10,11 @@ use actix_files::Files;
 {%- if 'rate-limiting' in backend.features %}
 use actix_governor::{Governor, GovernorConfigBuilder};
 {%- endif %}
+{%- if 'graph-ql' in backend.features %}
+use actix_web::{post, web};
+use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema, http::GraphiQLSource};
+use async_graphql_actix_web::{GraphQLRequest, GraphQLResponse};
+{%- endif %}
 {%- if frontend == 'askama' %}
 use askama::Template;
 {%- elif frontend == 'tera' %}
@@ -142,6 +147,34 @@ async fn root() -> impl Responder {
     "Hello from {{ name }}!"
 }
 {%- endif %}
+{%- if 'graph-ql' in backend.features %}
+
+/// The GraphQL schema: one `hello` field to get started.
+struct QueryRoot;
+
+#[Object]
+impl QueryRoot {
+    async fn hello(&self) -> &str {
+        "Hello from {{ name }}!"
+    }
+}
+
+type AppSchema = Schema<QueryRoot, EmptyMutation, EmptySubscription>;
+
+/// Interactive GraphQL IDE on GET /graphql.
+#[get("/graphql")]
+async fn graphiql() -> impl Responder {
+    actix_web::HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(GraphiQLSource::build().endpoint("/graphql").finish())
+}
+
+/// GraphQL endpoint on POST /graphql.
+#[post("/graphql")]
+async fn graphql(schema: web::Data<AppSchema>, request: GraphQLRequest) -> GraphQLResponse {
+    schema.execute(request.into_inner()).await.into()
+}
+{%- endif %}
 {%- if 'web-sockets' in backend.features %}
 
 /// WebSocket echo endpoint: sends every text message back.
@@ -182,6 +215,9 @@ async fn main() -> std::io::Result<()> {
         .finish()
         .expect("valid rate limiter configuration");
 {%- endif %}
+{%- if 'graph-ql' in backend.features %}
+    let schema = Schema::build(QueryRoot, EmptyMutation, EmptySubscription).finish();
+{%- endif %}
     println!("listening on http://localhost:3000");
     HttpServer::new(move || {
 {%- if 'rate-limiting' in backend.features %}
@@ -197,6 +233,12 @@ async fn main() -> std::io::Result<()> {
 {%- if frontend == 'yew' %}
         // Serve the WASM bundle built by trunk (`frontend/dist`) next to the API.
         let app = app.service(Files::new("/", "frontend/dist").index_file("index.html"));
+{%- endif %}
+{%- if 'graph-ql' in backend.features %}
+        let app = app
+            .service(graphiql)
+            .service(graphql)
+            .app_data(actix_web::web::Data::new(schema.clone()));
 {%- endif %}
 {%- if backend.database == 'sqlx' %}
         app.app_data(actix_web::web::Data::new(pool.clone()))

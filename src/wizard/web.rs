@@ -165,7 +165,7 @@ fn complete_backend(
 /// and flag-passed values outside this list are rejected up front instead
 /// of being silently ignored.
 fn implemented_features() -> Vec<Feature> {
-    vec![Feature::WebSockets, Feature::RateLimiting]
+    vec![Feature::WebSockets, Feature::GraphQL, Feature::RateLimiting]
 }
 
 /// Reject features with no template content yet, naming them by their
@@ -282,18 +282,18 @@ mod tests {
 
     #[test]
     fn unimplemented_features_are_rejected_by_name() {
-        let err = validate_features(&[Feature::WebSockets, Feature::gRPC, Feature::GraphQL])
-            .expect_err("grpc and graph-ql have no template content yet");
+        let err = validate_features(&[Feature::WebSockets, Feature::gRPC])
+            .expect_err("grpc has no template content yet");
         let Error::FeaturesNotAvailable(names) = err else {
             panic!("expected FeaturesNotAvailable");
         };
-        assert_eq!(names, "grpc, graph-ql");
+        assert_eq!(names, "grpc");
     }
 
     #[test]
     fn implemented_features_pass_validation() {
-        validate_features(&[Feature::WebSockets, Feature::RateLimiting])
-            .expect("web-sockets and rate-limiting are implemented");
+        validate_features(&[Feature::WebSockets, Feature::GraphQL, Feature::RateLimiting])
+            .expect("all implemented features pass");
         validate_features(&[]).expect("no features is fine");
     }
 
@@ -301,7 +301,7 @@ mod tests {
     fn prompts_offer_only_implemented_features() {
         assert_eq!(
             implemented_features(),
-            vec![Feature::WebSockets, Feature::RateLimiting]
+            vec![Feature::WebSockets, Feature::GraphQL, Feature::RateLimiting]
         );
     }
 }

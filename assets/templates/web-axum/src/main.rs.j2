@@ -18,6 +18,14 @@ use tower_http::services::ServeDir;
 use std::net::SocketAddr;
 use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
 {%- endif %}
+{%- if 'graph-ql' in backend.features %}
+use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema, http::GraphiQLSource};
+use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+use axum::extract::State;
+{%- if not (frontend and frontend != 'yew') %}
+use axum::response::Html;
+{%- endif %}
+{%- endif %}
 {%- if frontend == 'askama' %}
 use askama::Template;
 {%- elif frontend == 'tera' %}
@@ -44,18 +52,26 @@ async fn main() {
 {%- if 'web-sockets' in backend.features %}
     let app = app.route("/ws", get(ws_handler));
 {%- endif %}
+{%- if 'graph-ql' in backend.features %}
+    let app = app.route("/graphql", get(graphiql).post(graphql));
+{%- endif %}
 {%- if backend.database == 'sqlx' %}
-    let pool = db::create_pool().await.expect("failed to connect to database");
-    let app = app.with_state(pool);
+    let db = db::create_pool().await.expect("failed to connect to database");
 {%- elif backend.database == 'sea-orm' %}
-    let conn = db::connect().await.expect("failed to connect to database");
-    let app = app.with_state(conn);
+    let db = db::connect().await.expect("failed to connect to database");
 {%- elif backend.database == 'diesel' %}
-    let pool = db::create_pool();
-    let app = app.with_state(pool);
+    let db = db::create_pool();
 {%- elif backend.database == 'sled' %}
-    let store = db::open().expect("failed to open the database");
-    let app = app.with_state(store);
+    let db = db::open().expect("failed to open the database");
+{%- endif %}
+{%- if 'graph-ql' in backend.features %}
+    // The database handle is shared with the GraphQL resolvers as context data.
+    let schema = Schema::build(QueryRoot, EmptyMutation, EmptySubscription)
+        .data(db)
+        .finish();
+    let app = app.with_state(schema);
+{%- else %}
+    let app = app.with_state(db);
 {%- endif %}
 {%- if frontend == 'yew' %}
     // Serve the WASM bundle built by trunk (`frontend/dist`) next to the API.
@@ -190,6 +206,30 @@ async fn hello() -> &'static str {
 
 async fn root() -> &'static str {
     "Hello from {{ name }}!"
+}
+{%- endif %}
+{%- if 'graph-ql' in backend.features %}
+
+/// The GraphQL schema: one `hello` field to get started.
+struct QueryRoot;
+
+#[Object]
+impl QueryRoot {
+    async fn hello(&self) -> &str {
+        "Hello from {{ name }}!"
+    }
+}
+
+type AppSchema = Schema<QueryRoot, EmptyMutation, EmptySubscription>;
+
+/// Interactive GraphQL IDE on GET /graphql.
+async fn graphiql() -> Html<String> {
+    Html(GraphiQLSource::build().endpoint("/graphql").finish())
+}
+
+/// GraphQL endpoint on POST /graphql.
+async fn graphql(State(schema): State<AppSchema>, request: GraphQLRequest) -> GraphQLResponse {
+    schema.execute(request.into_inner()).await.into()
 }
 {%- endif %}
 {%- if 'web-sockets' in backend.features %}

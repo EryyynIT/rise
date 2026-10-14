@@ -13,6 +13,10 @@ tokio = { version = "1", features = ["full"] }
 {%- if 'rate-limiting' in backend.features %}
 tower_governor = "0.8"
 {%- endif %}
+{%- if 'graph-ql' in backend.features %}
+async-graphql = "7"
+async-graphql-axum = "7"
+{%- endif %}
 {%- if frontend == 'yew' %}
 tower-http = { version = "0.6", features = ["fs"] }
 {%- endif %}

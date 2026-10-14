@@ -60,8 +60,8 @@ mod db;
 #[tokio::main]
 async fn main() {
     let app = Router::new().route("/", get(root));
-    let pool = db::create_pool().await.expect("failed to connect to database");
-    let app = app.with_state(pool);
+    let db = db::create_pool().await.expect("failed to connect to database");
+    let app = app.with_state(db);
     // Rate limit requests per client IP: bursts of up to 5 requests,
     // then one request every 2 seconds on average.
     let governor_conf = GovernorConfigBuilder::default()

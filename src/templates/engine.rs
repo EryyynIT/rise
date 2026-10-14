@@ -17,20 +17,37 @@ use crate::templates::template::{RENDER_SUFFIX, Template, TemplateFile};
 /// Where to load the template from.
 #[derive(Debug, Default)]
 pub(crate) enum TemplateSource {
-    /// The embedded template implementing the spec's stack.
+    /// Embedded templates implementing the spec's stack.
     #[default]
     Embedded,
-    /// A template directory on disk, used instead of the embedded one
+    /// A template directory on disk, used instead of the embedded plan
     /// (`--template`). The spec is still collected as usual and forms the
-    /// render context.
+    /// render context. A custom directory is always a single template
+    /// rendered into the project root; composition is embedded-only.
     Dir(PathBuf),
 }
 
-impl TemplateSource {
-    fn load(&self, spec: &ProjectSpec) -> Result<Template> {
-        match self {
-            Self::Embedded => Template::embedded(template_id(spec)?),
-            Self::Dir(path) => Template::from_dir(path),
+/// One step of a generation plan: a single-crate project has exactly one
+/// step rendering into the root; a workspace project has one step per
+/// crate plus a root step.
+#[derive(Debug, PartialEq, Eq)]
+struct TemplateStep {
+    /// Embedded template directory name.
+    id: &'static str,
+    /// Target subdirectory, relative to the project root (`""` = root).
+    subdir: &'static str,
+    /// Package name of the crate this step renders.
+    crate_name: String,
+}
+
+impl TemplateStep {
+    /// A step rendering into the project root; the crate takes the
+    /// project name.
+    fn root(id: &'static str, name: &ProjectName) -> Self {
+        Self {
+            id,
+            subdir: "",
+            crate_name: name.to_string(),
         }
     }
 }
@@ -53,11 +70,17 @@ pub(crate) fn generate(
     name: &ProjectName,
     source: &TemplateSource,
 ) -> Result<PathBuf> {
-    let template = source.load(spec)?;
     let target = PathBuf::from(name.as_str());
     let target_existed = prepare_target(&target)?;
 
-    let result = render_into(&template, spec, name.as_str(), &target);
+    let result = match source {
+        TemplateSource::Embedded => {
+            template_plan(spec, name).and_then(|plan| render_plan(&plan, spec, name, &target))
+        }
+        TemplateSource::Dir(path) => Template::from_dir(path).and_then(|template| {
+            render_into(&template, spec, name.as_str(), name.as_str(), &target)
+        }),
+    };
     if result.is_err() && !target_existed {
         // Never leave a half-written project behind.
         let _ = fs::remove_dir_all(&target);
@@ -66,17 +89,41 @@ pub(crate) fn generate(
     Ok(target)
 }
 
-/// Map a spec to the name of the template implementing its stack.
-fn template_id(spec: &ProjectSpec) -> Result<&'static str> {
+/// Render every step of an embedded plan into its subdirectory.
+fn render_plan(
+    steps: &[TemplateStep],
+    spec: &ProjectSpec,
+    name: &ProjectName,
+    target: &Path,
+) -> Result<()> {
+    for step in steps {
+        let template = Template::embedded(step.id)?;
+        render_into(
+            &template,
+            spec,
+            name.as_str(),
+            &step.crate_name,
+            &target.join(step.subdir),
+        )?;
+    }
+    Ok(())
+}
+
+/// Map a spec to the plan of embedded templates implementing its stack.
+fn template_plan(spec: &ProjectSpec, name: &ProjectName) -> Result<Vec<TemplateStep>> {
+    let backend_template = |backend: Backend| match backend {
+        Backend::Axum => Ok("web-axum"),
+        Backend::Actix => Ok("web-actix"),
+        other => Err(Error::TemplateNotFound(format!(
+            "web-{}",
+            other.to_string().to_lowercase()
+        ))),
+    };
     match spec {
-        ProjectSpec::WebApp(WebAppSpec::Backend(backend)) => match backend.backend {
-            Backend::Axum => Ok("web-axum"),
-            Backend::Actix => Ok("web-actix"),
-            other => Err(Error::TemplateNotFound(format!(
-                "web-{}",
-                other.to_string().to_lowercase()
-            ))),
-        },
+        ProjectSpec::WebApp(WebAppSpec::Backend(backend)) => Ok(vec![TemplateStep::root(
+            backend_template(backend.backend)?,
+            name,
+        )]),
         ProjectSpec::WebApp(WebAppSpec::Frontend(_)) => {
             Err(Error::TemplateNotFound("web-frontend".into()))
         }
@@ -86,20 +133,16 @@ fn template_id(spec: &ProjectSpec) -> Result<&'static str> {
         ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack))
             if fullstack.frontend.is_template_engine() =>
         {
-            match fullstack.backend.backend {
-                Backend::Axum => Ok("web-axum"),
-                Backend::Actix => Ok("web-actix"),
-                other => Err(Error::TemplateNotFound(format!(
-                    "web-{}",
-                    other.to_string().to_lowercase()
-                ))),
-            }
+            Ok(vec![TemplateStep::root(
+                backend_template(fullstack.backend.backend)?,
+                name,
+            )])
         }
         ProjectSpec::WebApp(WebAppSpec::Fullstack(_)) => {
             Err(Error::TemplateNotFound("web-fullstack".into()))
         }
-        ProjectSpec::CliApp => Ok("cli"),
-        ProjectSpec::Library => Ok("library"),
+        ProjectSpec::CliApp => Ok(vec![TemplateStep::root("cli", name)]),
+        ProjectSpec::Library => Ok(vec![TemplateStep::root("library", name)]),
         ProjectSpec::Embedded => Err(Error::TemplateNotFound("embedded".into())),
         ProjectSpec::Game => Err(Error::TemplateNotFound("game".into())),
     }
@@ -128,7 +171,7 @@ struct RenderContext<'a> {
 }
 
 impl<'a> RenderContext<'a> {
-    fn new(name: &'a str, spec: &'a ProjectSpec) -> Self {
+    fn new(name: &'a str, crate_name: &'a str, spec: &'a ProjectSpec) -> Self {
         let (backend, frontend) = match spec {
             ProjectSpec::WebApp(WebAppSpec::Backend(backend)) => (Some(backend), None),
             ProjectSpec::WebApp(WebAppSpec::Frontend(frontend)) => (None, Some(frontend.frontend)),
@@ -139,7 +182,7 @@ impl<'a> RenderContext<'a> {
         };
         Self {
             name,
-            crate_name: name,
+            crate_name,
             spec,
             backend,
             frontend,
@@ -162,8 +205,16 @@ fn prepare_target(target: &Path) -> Result<bool> {
     }
 }
 
-/// Render every template file into `target`.
-fn render_into(template: &Template, spec: &ProjectSpec, name: &str, target: &Path) -> Result<()> {
+/// Render every template file into `target`. `crate_name` is the package
+/// name this render produces — the project name for single-crate plans,
+/// a member name (`<name>-backend`, ...) for workspace steps.
+fn render_into(
+    template: &Template,
+    spec: &ProjectSpec,
+    name: &str,
+    crate_name: &str,
+    target: &Path,
+) -> Result<()> {
     let mut env = Environment::new();
     // A typo in a template variable must fail the render, not silently
     // produce empty strings.
@@ -176,7 +227,7 @@ fn render_into(template: &Template, spec: &ProjectSpec, name: &str, target: &Pat
         .expect("default syntax config is valid");
     env.set_syntax(syntax);
 
-    let ctx = Value::from(Serde(RenderContext::new(name, spec)));
+    let ctx = Value::from(Serde(RenderContext::new(name, crate_name, spec)));
     let excluded = excluded_paths(template, &env, &ctx)?;
 
     for file in template.files() {
@@ -253,6 +304,20 @@ mod tests {
     use super::*;
     use crate::spec::{BackendSpec, Database, Deployment, Feature, FullstackSpec, Testing};
 
+    fn project_name(name: &str) -> ProjectName {
+        ProjectName::new(name.to_owned()).expect("valid project name")
+    }
+
+    /// Single-crate renders: the crate takes the project name.
+    fn render_test(
+        template: &Template,
+        spec: &ProjectSpec,
+        name: &str,
+        target: &Path,
+    ) -> Result<()> {
+        render_into(template, spec, name, name, target)
+    }
+
     fn backend_spec(backend: Backend, deployment: Deployment) -> ProjectSpec {
         backend_spec_full(backend, Database::SQLx, deployment, vec![], vec![])
     }
@@ -287,57 +352,92 @@ mod tests {
     }
 
     #[test]
-    fn axum_backend_maps_to_web_axum() {
+    fn axum_backend_plans_a_single_root_step() {
+        let name = project_name("app");
         let spec = backend_spec(Backend::Axum, Deployment::Docker);
-        assert_eq!(template_id(&spec).expect("template id"), "web-axum");
+        let plan = template_plan(&spec, &name).expect("plan");
+        assert_eq!(plan, vec![TemplateStep::root("web-axum", &name)]);
     }
 
     #[test]
-    fn actix_backend_maps_to_web_actix() {
+    fn actix_backend_plans_a_single_root_step() {
+        let name = project_name("app");
         let spec = backend_spec(Backend::Actix, Deployment::Docker);
-        assert_eq!(template_id(&spec).expect("template id"), "web-actix");
+        let plan = template_plan(&spec, &name).expect("plan");
+        assert_eq!(plan, vec![TemplateStep::root("web-actix", &name)]);
     }
 
     #[test]
-    fn cli_app_maps_to_cli() {
-        assert_eq!(
-            template_id(&ProjectSpec::CliApp).expect("template id"),
-            "cli"
-        );
+    fn cli_app_plans_the_cli_template() {
+        let name = project_name("app");
+        let plan = template_plan(&ProjectSpec::CliApp, &name).expect("plan");
+        assert_eq!(plan, vec![TemplateStep::root("cli", &name)]);
     }
 
     #[test]
-    fn library_maps_to_library() {
-        assert_eq!(
-            template_id(&ProjectSpec::Library).expect("template id"),
-            "library"
-        );
+    fn library_plans_the_library_template() {
+        let name = project_name("app");
+        let plan = template_plan(&ProjectSpec::Library, &name).expect("plan");
+        assert_eq!(plan, vec![TemplateStep::root("library", &name)]);
     }
 
     #[test]
     fn unsupported_stack_is_template_not_found() {
-        let err = template_id(&backend_spec(Backend::Rocket, Deployment::Docker))
+        let name = project_name("app");
+        let err = template_plan(&backend_spec(Backend::Rocket, Deployment::Docker), &name)
             .expect_err("no rocket template yet");
         assert!(matches!(err, Error::TemplateNotFound(id) if id == "web-rocket"));
 
-        let err = template_id(&ProjectSpec::Embedded).expect_err("no embedded template yet");
+        let err =
+            template_plan(&ProjectSpec::Embedded, &name).expect_err("no embedded template yet");
         assert!(matches!(err, Error::TemplateNotFound(id) if id == "embedded"));
     }
 
     #[test]
-    fn fullstack_with_template_engine_maps_to_the_backend_template() {
+    fn fullstack_with_template_engine_plans_the_backend_template() {
+        let name = project_name("app");
         let spec = fullstack_spec(Backend::Axum, Frontend::Askama);
-        assert_eq!(template_id(&spec).expect("template id"), "web-axum");
+        let plan = template_plan(&spec, &name).expect("plan");
+        assert_eq!(plan, vec![TemplateStep::root("web-axum", &name)]);
 
         let spec = fullstack_spec(Backend::Actix, Frontend::Tera);
-        assert_eq!(template_id(&spec).expect("template id"), "web-actix");
+        let plan = template_plan(&spec, &name).expect("plan");
+        assert_eq!(plan, vec![TemplateStep::root("web-actix", &name)]);
     }
 
     #[test]
     fn fullstack_with_wasm_frontend_is_template_not_found() {
+        let name = project_name("app");
         let spec = fullstack_spec(Backend::Axum, Frontend::Yew);
-        let err = template_id(&spec).expect_err("no yew fullstack template yet");
+        let err = template_plan(&spec, &name).expect_err("no yew fullstack template yet");
         assert!(matches!(err, Error::TemplateNotFound(id) if id == "web-fullstack"));
+    }
+
+    #[test]
+    fn multi_step_plan_renders_into_subdirectories() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let name = project_name("app");
+        let plan = vec![
+            TemplateStep {
+                id: "cli",
+                subdir: "tool",
+                crate_name: "app-tool".to_owned(),
+            },
+            TemplateStep {
+                id: "library",
+                subdir: "core",
+                crate_name: "app-core".to_owned(),
+            },
+        ];
+
+        render_plan(&plan, &ProjectSpec::CliApp, &name, tmp.path()).expect("render plan");
+
+        let tool = fs::read_to_string(tmp.path().join("tool/Cargo.toml")).expect("read");
+        assert!(tool.contains("name = \"app-tool\""));
+        let core = fs::read_to_string(tmp.path().join("core/Cargo.toml")).expect("read");
+        assert!(core.contains("name = \"app-core\""));
+        assert!(tmp.path().join("tool/src/main.rs").exists());
+        assert!(tmp.path().join("core/src/lib.rs").exists());
     }
 
     #[test]
@@ -345,7 +445,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let template = Template::embedded("web-axum").expect("template");
 
-        render_into(
+        render_test(
             &template,
             &backend_spec(Backend::Axum, Deployment::Docker),
             "app",
@@ -363,7 +463,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let template = Template::embedded("web-axum").expect("template");
 
-        render_into(
+        render_test(
             &template,
             &backend_spec(Backend::Axum, Deployment::Kubernetes),
             "app",
@@ -381,7 +481,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let template = Template::embedded("web-axum").expect("template");
 
-        render_into(
+        render_test(
             &template,
             &backend_spec(Backend::Axum, Deployment::Docker),
             "super-app",
@@ -398,7 +498,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let template = Template::embedded("web-actix").expect("template");
 
-        render_into(
+        render_test(
             &template,
             &backend_spec(Backend::Actix, Deployment::Docker),
             "super-app",
@@ -417,7 +517,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let template = Template::embedded("web-actix").expect("template");
 
-        render_into(
+        render_test(
             &template,
             &backend_spec(Backend::Actix, Deployment::Kubernetes),
             "app",
@@ -434,7 +534,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let template = Template::embedded("cli").expect("template");
 
-        render_into(&template, &ProjectSpec::CliApp, "greeter", tmp.path()).expect("render");
+        render_test(&template, &ProjectSpec::CliApp, "greeter", tmp.path()).expect("render");
 
         let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
         assert!(cargo_toml.contains("name = \"greeter\""));
@@ -449,7 +549,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let template = Template::embedded("library").expect("template");
 
-        render_into(&template, &ProjectSpec::Library, "mathlib", tmp.path()).expect("render");
+        render_test(&template, &ProjectSpec::Library, "mathlib", tmp.path()).expect("render");
 
         let lib_rs = fs::read_to_string(tmp.path().join("src/lib.rs")).expect("read");
         assert!(lib_rs.contains("mathlib"));
@@ -472,21 +572,11 @@ mod tests {
         let target_dir = tmp.path().join("out");
         fs::create_dir(&target_dir).expect("mkdir");
         let spec = ProjectSpec::CliApp;
-        let source = TemplateSource::Dir(template_dir);
-        let template = source.load(&spec).expect("load custom template");
-        render_into(&template, &spec, "custom-app", &target_dir).expect("render");
+        let template = Template::from_dir(&template_dir).expect("load custom template");
+        render_test(&template, &spec, "custom-app", &target_dir).expect("render");
 
         let readme = fs::read_to_string(target_dir.join("README.md")).expect("read output");
         assert_eq!(readme, "# custom-app");
-    }
-
-    #[test]
-    fn embedded_source_maps_the_spec() {
-        let spec = ProjectSpec::Library;
-        let template = TemplateSource::Embedded
-            .load(&spec)
-            .expect("embedded template");
-        assert_eq!(template.manifest().name, "library");
     }
 
     #[test]
@@ -505,7 +595,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let template = Template::embedded("web-axum").expect("template");
 
-        render_into(
+        render_test(
             &template,
             &backend_spec(Backend::Axum, Deployment::Docker),
             "app",
@@ -536,7 +626,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let template = Template::embedded("web-axum").expect("template");
 
-        render_into(&template, &spec, "app", tmp.path()).expect("render");
+        render_test(&template, &spec, "app", tmp.path()).expect("render");
 
         assert!(!tmp.path().join("src/db.rs").exists());
         assert!(!tmp.path().join(".env.example").exists());
@@ -552,7 +642,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let template = Template::embedded("web-actix").expect("template");
 
-        render_into(
+        render_test(
             &template,
             &backend_spec(Backend::Actix, Deployment::Docker),
             "app",
@@ -577,7 +667,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let template = Template::embedded("web-axum").expect("template");
 
-        render_into(&template, &spec, "app", tmp.path()).expect("render");
+        render_test(&template, &spec, "app", tmp.path()).expect("render");
 
         let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
         assert!(main_rs.contains("#[cfg(test)]"));
@@ -607,12 +697,12 @@ mod tests {
         let template = Template::embedded("web-axum").expect("template");
 
         let tmp = tempfile::tempdir().expect("tempdir");
-        render_into(&template, &with_sqlx, "app", tmp.path()).expect("render");
+        render_test(&template, &with_sqlx, "app", tmp.path()).expect("render");
         let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
         assert!(main_rs.contains("mod db_tests"));
 
         let tmp = tempfile::tempdir().expect("tempdir");
-        render_into(&template, &with_diesel, "app", tmp.path()).expect("render");
+        render_test(&template, &with_diesel, "app", tmp.path()).expect("render");
         let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
         assert!(
             !main_rs.contains("mod db_tests"),
@@ -632,7 +722,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let template = Template::embedded("web-actix").expect("template");
 
-        render_into(&template, &spec, "app", tmp.path()).expect("render");
+        render_test(&template, &spec, "app", tmp.path()).expect("render");
 
         let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
         assert!(main_rs.contains("actix_web::test"));
@@ -652,7 +742,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let template = Template::embedded("web-axum").expect("template");
 
-        render_into(&template, &spec, "app", tmp.path()).expect("render");
+        render_test(&template, &spec, "app", tmp.path()).expect("render");
 
         let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
         assert!(cargo_toml.contains("features = [\"ws\"]"));
@@ -673,7 +763,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let template = Template::embedded("web-actix").expect("template");
 
-        render_into(&template, &spec, "app", tmp.path()).expect("render");
+        render_test(&template, &spec, "app", tmp.path()).expect("render");
 
         let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
         assert!(cargo_toml.contains("actix-ws"));
@@ -686,7 +776,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let template = Template::embedded("web-axum").expect("template");
 
-        render_into(
+        render_test(
             &template,
             &backend_spec(Backend::Axum, Deployment::Docker),
             "app",
@@ -708,7 +798,7 @@ mod tests {
         let spec = fullstack_spec(Backend::Axum, Frontend::Askama);
         let template = Template::embedded("web-axum").expect("template");
 
-        render_into(&template, &spec, "app", tmp.path()).expect("render");
+        render_test(&template, &spec, "app", tmp.path()).expect("render");
 
         let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
         assert!(cargo_toml.contains("askama"));
@@ -725,7 +815,7 @@ mod tests {
         let spec = fullstack_spec(Backend::Axum, Frontend::Handlebars);
         let template = Template::embedded("web-axum").expect("template");
 
-        render_into(&template, &spec, "app", tmp.path()).expect("render");
+        render_test(&template, &spec, "app", tmp.path()).expect("render");
 
         let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
         assert!(cargo_toml.contains("handlebars"));
@@ -740,7 +830,7 @@ mod tests {
         let spec = fullstack_spec(Backend::Actix, Frontend::Tera);
         let template = Template::embedded("web-actix").expect("template");
 
-        render_into(&template, &spec, "app", tmp.path()).expect("render");
+        render_test(&template, &spec, "app", tmp.path()).expect("render");
 
         let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
         assert!(cargo_toml.contains("tera"));
@@ -756,7 +846,7 @@ mod tests {
         let spec = fullstack_spec(Backend::Actix, Frontend::Minijinja);
         let template = Template::embedded("web-actix").expect("template");
 
-        render_into(&template, &spec, "app", tmp.path()).expect("render");
+        render_test(&template, &spec, "app", tmp.path()).expect("render");
 
         let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
         assert!(cargo_toml.contains("minijinja"));
@@ -915,9 +1005,9 @@ mod tests {
     /// snapshots match across platforms.
     fn snapshot_output(spec: &ProjectSpec) -> String {
         let tmp = tempfile::tempdir().expect("tempdir");
-        let template =
-            Template::embedded(template_id(spec).expect("template id")).expect("embedded template");
-        render_into(&template, spec, "sample-app", tmp.path()).expect("render");
+        let name = project_name("sample-app");
+        let plan = template_plan(spec, &name).expect("plan");
+        render_plan(&plan, spec, &name, tmp.path()).expect("render");
 
         let mut files = Vec::new();
         collect_files(tmp.path(), tmp.path(), &mut files);

@@ -92,6 +92,8 @@ impl Template {
 }
 
 /// Parse the manifests of all embedded templates, sorted by name.
+/// Internal templates (building blocks of multi-crate plans, not
+/// user-selectable stacks) are hidden.
 ///
 /// # Errors
 ///
@@ -104,7 +106,10 @@ pub(crate) fn list_embedded() -> Result<Vec<Manifest>> {
             .file_name()
             .expect("include_dir paths always have a file name")
             .to_string_lossy();
-        manifests.push(Template::embedded(&name)?.manifest);
+        let manifest = Template::embedded(&name)?.manifest;
+        if !manifest.internal {
+            manifests.push(manifest);
+        }
     }
     manifests.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(manifests)
@@ -118,6 +123,10 @@ pub(crate) struct Manifest {
     pub name: String,
     /// Human-readable summary.
     pub description: String,
+    /// Internal templates are rendered only as steps of a multi-crate
+    /// plan; `rise list` hides them.
+    #[serde(default)]
+    pub internal: bool,
     /// File selection rules.
     #[serde(default)]
     pub files: FileRules,
@@ -236,6 +245,18 @@ Dockerfile = "spec.WebApp.Backend.deployment != 'docker'"
     fn manifest_rejects_unknown_fields() {
         let result = toml::from_str::<Manifest>("name = \"x\"\ndescription = \"y\"\nbogus = 1");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn manifest_internal_defaults_to_false() {
+        let manifest: Manifest =
+            toml::from_str("name = \"x\"\ndescription = \"y\"").expect("valid manifest");
+        assert!(!manifest.internal);
+
+        let manifest: Manifest =
+            toml::from_str("name = \"x\"\ndescription = \"y\"\ninternal = true")
+                .expect("valid manifest");
+        assert!(manifest.internal);
     }
 
     #[test]

@@ -60,22 +60,33 @@ cargo test
 
 ```
 src/
-├── main.rs          # Where the magic starts
-├── lib.rs           # Where the real magic lives
-├── templates/       # Project templates go here
-├── cli/             # Command line stuff
-├── color/           # Main palette
-└── config/          # Configuration nonsense
+├── main.rs          # Thin entry: exit codes
+├── lib.rs           # Dispatch: list / completions / new
+├── cli.rs           # clap schema — flags only, no logic
+├── wizard/          # inquire prompts: fill the gaps in the spec
+├── spec.rs          # Spec types — the single source of truth
+├── name.rs          # ProjectName newtype (validated once)
+├── error.rs         # Typed errors (thiserror)
+├── templates/       # Template loading + the render engine
+└── color/           # Brand palette
+assets/templates/    # The templates themselves — data, not code
 ```
 
 ### Adding New Project Types
 
 Want to add support for that obscure Rust use case we haven't thought of? 
+A new template is mostly *data*:
 
-1. Add your variant to `ProjectConfig` in `src/config/project.rs`
-2. Implement the template generation in `src/templates/`
-3. Update the CLI prompts in `src/cli/`
-4. Submit a PR and bask in the glory
+1. Create `assets/templates/<your-template>/` — a `template.toml` manifest plus
+   the files to generate (see [docs/TEMPLATES.md](docs/TEMPLATES.md) for the
+   manifest format and the render context).
+2. Add one arm mapping the spec to your template's name in `template_id()`
+   (`src/templates/engine.rs`).
+3. If your stack needs options the spec doesn't have yet, extend the enums in
+   `src/spec.rs` and teach the wizard to ask (`src/wizard/`).
+4. Add a snapshot test (engine tests use `insta`) and an integration test in
+   `tests/cli.rs`, then make sure `cargo test` passes.
+5. Submit a PR and bask in the glory
 
 ---
 

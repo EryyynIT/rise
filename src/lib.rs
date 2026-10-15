@@ -4,7 +4,7 @@ use colored::Colorize;
 
 use crate::cli::{Command, NewArgs};
 use crate::color::{FERRIS_TEAL, RUST_ORANGE, STEEL_GRAY};
-use crate::spec::{Database, Frontend, ProjectSpec, WebAppSpec};
+use crate::spec::{Database, Feature, Frontend, ProjectSpec, WebAppSpec};
 
 mod cli;
 mod color;
@@ -85,6 +85,14 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
         out.push_str(
             "  rustup target add wasm32-unknown-unknown && cargo install --locked cargo-leptos  # one-time setup\n",
         );
+    }
+    let features: &[Feature] = match &spec {
+        ProjectSpec::WebApp(WebAppSpec::Backend(backend)) => &backend.features,
+        ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack)) => &fullstack.backend.features,
+        _ => &[],
+    };
+    if features.contains(&Feature::gRPC) {
+        out.push_str("  # gRPC builds need protoc: https://grpc.io/docs/protoc-installation/\n");
     }
     match &spec {
         ProjectSpec::Library => out.push_str("  cargo test\n"),

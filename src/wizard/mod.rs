@@ -118,7 +118,11 @@ fn resolve_kind(
         // at generation with a typed TemplateNotFound.
         (None, false, Interaction::Interactive) => select(
             "What type of project do you want to create?",
-            vec![ProjectKind::WebApp, ProjectKind::CliApp, ProjectKind::Library],
+            vec![
+                ProjectKind::WebApp,
+                ProjectKind::CliApp,
+                ProjectKind::Library,
+            ],
         ),
         (None, false, Interaction::NonInteractive) => Err(Error::MissingOptions("`--kind`".into())),
     }

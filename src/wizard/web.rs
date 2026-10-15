@@ -128,7 +128,11 @@ fn prompt_backend(backend: Backend) -> Result<BackendSpec> {
     reject_unavailable(&testing, &implemented_testing, Error::TestingNotAvailable)?;
     let implemented_features = implemented_features();
     let features = multi_select("Select features", implemented_features.clone())?;
-    reject_unavailable(&features, &implemented_features, Error::FeaturesNotAvailable)?;
+    reject_unavailable(
+        &features,
+        &implemented_features,
+        Error::FeaturesNotAvailable,
+    )?;
     Ok(BackendSpec {
         backend,
         database,
@@ -161,7 +165,11 @@ fn complete_backend(
     let features = fill_multi(draft.features, mode, || {
         multi_select("Select features", implemented_features.clone())
     })?;
-    reject_unavailable(&features, &implemented_features, Error::FeaturesNotAvailable)?;
+    reject_unavailable(
+        &features,
+        &implemented_features,
+        Error::FeaturesNotAvailable,
+    )?;
     Ok(BackendSpec {
         backend,
         database,
@@ -226,7 +234,6 @@ fn implemented_features() -> Vec<Feature> {
         Feature::RateLimiting,
     ]
 }
-
 
 /// Take the flag value, ask for it, or report it missing.
 fn fill<T: Copy>(
@@ -298,7 +305,10 @@ mod tests {
     #[test]
     fn frontend_options_without_backend() {
         // Frontend-only: the standalone trunk SPAs.
-        assert_eq!(frontend_options(false), vec![Frontend::Yew, Frontend::Leptos]);
+        assert_eq!(
+            frontend_options(false),
+            vec![Frontend::Yew, Frontend::Leptos]
+        );
     }
 
     #[test]
@@ -385,8 +395,12 @@ mod tests {
     fn implemented_testing_passes_validation() {
         for database in Database::iter() {
             let implemented = implemented_testing(database);
-            reject_unavailable(&implemented.clone(), &implemented, Error::TestingNotAvailable)
-                .expect("the implemented list passes its own validation");
+            reject_unavailable(
+                &implemented.clone(),
+                &implemented,
+                Error::TestingNotAvailable,
+            )
+            .expect("the implemented list passes its own validation");
         }
     }
 

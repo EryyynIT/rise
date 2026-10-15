@@ -64,12 +64,7 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
     let mut out = format!("created ./{}\n\nnext steps:\n  cd {name}\n", path.display());
     let database = match &spec {
         ProjectSpec::WebApp(WebAppSpec::Backend(backend)) => Some(backend.database),
-        // Leptos fullstack templates have no .env.example yet.
-        ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack))
-            if fullstack.frontend != Frontend::Leptos =>
-        {
-            Some(fullstack.backend.database)
-        }
+        ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack)) => Some(fullstack.backend.database),
         _ => None,
     };
     if let Some(database) = database {

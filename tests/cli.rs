@@ -697,8 +697,9 @@ fn new_generates_leptos_axum_fullstack_without_prompts() {
         .stdout(predicate::str::contains("created ./leptos-app"))
         .stdout(predicate::str::contains("cargo-leptos"))
         .stdout(predicate::str::contains("cargo leptos watch"))
-        // No database wiring yet, hence no .env hint.
-        .stdout(predicate::str::contains(".env").not());
+        // Database wiring ships with the leptos templates, so the
+        // .env hint is printed like for any other backend.
+        .stdout(predicate::str::contains(".env"));
 
     let project = tmp.path().join("leptos-app");
     let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read");

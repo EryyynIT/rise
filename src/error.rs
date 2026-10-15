@@ -8,7 +8,11 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 /// Errors that can occur while collecting a `ProjectSpec` or scaffolding
 /// a project.
+///
+/// The variant set grows as scaffolding learns new failure modes (a
+/// variant was already added in 0.6.0); match with a wildcard arm.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum Error {
     /// The user aborted an interactive prompt (Esc or Ctrl+C).
     ///

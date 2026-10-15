@@ -125,9 +125,10 @@ fn prompt_backend(backend: Backend) -> Result<BackendSpec> {
     let deployment = select("Select a deployment option", Deployment::iter().collect())?;
     let implemented_testing = implemented_testing(database);
     let testing = multi_select("Select testing options", implemented_testing.clone())?;
-    validate_testing(&testing, &implemented_testing)?;
-    let features = multi_select("Select features", implemented_features())?;
-    validate_features(&features, &implemented_features())?;
+    reject_unavailable(&testing, &implemented_testing, Error::TestingNotAvailable)?;
+    let implemented_features = implemented_features();
+    let features = multi_select("Select features", implemented_features.clone())?;
+    reject_unavailable(&features, &implemented_features, Error::FeaturesNotAvailable)?;
     Ok(BackendSpec {
         backend,
         database,
@@ -155,11 +156,12 @@ fn complete_backend(
     let testing = fill_multi(draft.testing, mode, || {
         multi_select("Select testing options", implemented_testing.clone())
     })?;
-    validate_testing(&testing, &implemented_testing)?;
+    reject_unavailable(&testing, &implemented_testing, Error::TestingNotAvailable)?;
+    let implemented_features = implemented_features();
     let features = fill_multi(draft.features, mode, || {
-        multi_select("Select features", implemented_features())
+        multi_select("Select features", implemented_features.clone())
     })?;
-    validate_features(&features, &implemented_features())?;
+    reject_unavailable(&features, &implemented_features, Error::FeaturesNotAvailable)?;
     Ok(BackendSpec {
         backend,
         database,
@@ -175,7 +177,7 @@ fn complete_backend(
 /// and nothing else. `sqlx` generates a pool test, which needs a sqlx
 /// pool to exercise — the flag path rejects `--testing sqlx` with another
 /// database in `validate_flags`. Flag-passed values outside this list are
-/// rejected by [`validate_testing`].
+/// rejected by [`reject_unavailable`].
 fn implemented_testing(database: Database) -> Vec<Testing> {
     let mut options = vec![Testing::Api];
     if database == Database::SQLx {
@@ -184,26 +186,32 @@ fn implemented_testing(database: Database) -> Vec<Testing> {
     options
 }
 
-/// Reject testing options with no template content for the chosen stack,
-/// naming them by their CLI spellings. The implemented list is a
+/// Reject selected options with no template content for the chosen
+/// stack, naming them by their CLI spellings. The implemented list is a
 /// parameter so the rejection path stays testable.
-fn validate_testing(testing: &[Testing], implemented: &[Testing]) -> Result<()> {
-    use clap::ValueEnum;
-    let unimplemented = testing
+fn reject_unavailable<T>(
+    selected: &[T],
+    implemented: &[T],
+    error: impl FnOnce(String) -> Error,
+) -> Result<()>
+where
+    T: PartialEq + clap::ValueEnum,
+{
+    let unavailable = selected
         .iter()
         .filter(|option| !implemented.contains(option))
         .map(|option| {
             option
                 .to_possible_value()
-                .expect("testing values are never hidden")
+                .expect("option values are never hidden")
                 .get_name()
                 .to_owned()
         })
         .collect::<Vec<_>>();
-    if unimplemented.is_empty() {
+    if unavailable.is_empty() {
         return Ok(());
     }
-    Err(Error::TestingNotAvailable(unimplemented.join(", ")))
+    Err(error(unavailable.join(", ")))
 }
 
 /// The features the templates actually render — currently every
@@ -219,27 +227,6 @@ fn implemented_features() -> Vec<Feature> {
     ]
 }
 
-/// Reject features with no template content yet, naming them by their
-/// CLI spellings. The implemented list is a parameter so the rejection
-/// path stays testable even when every variant is implemented.
-fn validate_features(features: &[Feature], implemented: &[Feature]) -> Result<()> {
-    use clap::ValueEnum;
-    let unimplemented = features
-        .iter()
-        .filter(|feature| !implemented.contains(feature))
-        .map(|feature| {
-            feature
-                .to_possible_value()
-                .expect("feature values are never hidden")
-                .get_name()
-                .to_owned()
-        })
-        .collect::<Vec<_>>();
-    if unimplemented.is_empty() {
-        return Ok(());
-    }
-    Err(Error::FeaturesNotAvailable(unimplemented.join(", ")))
-}
 
 /// Take the flag value, ask for it, or report it missing.
 fn fill<T: Copy>(
@@ -348,9 +335,10 @@ mod tests {
     fn unimplemented_features_are_rejected_by_name() {
         // The rejection path must keep working for future Feature variants
         // even though every current one has template content.
-        let err = validate_features(
+        let err = reject_unavailable(
             &[Feature::WebSockets, Feature::gRPC],
             &[Feature::WebSockets],
+            Error::FeaturesNotAvailable,
         )
         .expect_err("grpc is not in the given implemented list");
         let Error::FeaturesNotAvailable(names) = err else {
@@ -381,8 +369,12 @@ mod tests {
 
     #[test]
     fn unimplemented_testing_options_are_rejected_by_name() {
-        let err = validate_testing(&[Testing::Mock], &[Testing::Api, Testing::SQLx])
-            .expect_err("mock is not in the given implemented list");
+        let err = reject_unavailable(
+            &[Testing::Mock],
+            &[Testing::Api, Testing::SQLx],
+            Error::TestingNotAvailable,
+        )
+        .expect_err("mock is not in the given implemented list");
         let Error::TestingNotAvailable(names) = err else {
             panic!("expected TestingNotAvailable");
         };
@@ -393,7 +385,7 @@ mod tests {
     fn implemented_testing_passes_validation() {
         for database in Database::iter() {
             let implemented = implemented_testing(database);
-            validate_testing(&implemented.clone(), &implemented)
+            reject_unavailable(&implemented.clone(), &implemented, Error::TestingNotAvailable)
                 .expect("the implemented list passes its own validation");
         }
     }
@@ -401,7 +393,7 @@ mod tests {
     #[test]
     fn implemented_features_pass_validation() {
         let implemented = implemented_features();
-        validate_features(
+        reject_unavailable(
             &[
                 Feature::WebSockets,
                 Feature::gRPC,
@@ -409,9 +401,11 @@ mod tests {
                 Feature::RateLimiting,
             ],
             &implemented,
+            Error::FeaturesNotAvailable,
         )
         .expect("all implemented features pass");
-        validate_features(&[], &implemented).expect("no features is fine");
+        reject_unavailable(&[], &implemented, Error::FeaturesNotAvailable)
+            .expect("no features is fine");
     }
 
     #[test]

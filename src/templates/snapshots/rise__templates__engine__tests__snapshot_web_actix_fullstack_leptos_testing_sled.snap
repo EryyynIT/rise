@@ -3,10 +3,11 @@ source: src/templates/engine.rs
 expression: "snapshot_output(&fullstack_spec_full(Backend::Actix, Frontend::Leptos,\nDatabase::Sled, Deployment::Docker, vec![Testing::Api],))"
 ---
 === .dockerignore ===
-# Keep the build context small: cargo-leptos output under target/ is
-# rebuilt inside the image.
+# Keep the build context small and secrets out of image layers:
+# cargo-leptos output under target/ is rebuilt inside the image.
 .git
 /target
+.env
 
 === .env.example ===
 DB_PATH=data

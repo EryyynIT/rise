@@ -1,4 +1,5 @@
-# Keep the build context small: cargo-leptos output under target/ is
-# rebuilt inside the image.
+# Keep the build context small and secrets out of image layers:
+# cargo-leptos output under target/ is rebuilt inside the image.
 .git
 /target
+.env

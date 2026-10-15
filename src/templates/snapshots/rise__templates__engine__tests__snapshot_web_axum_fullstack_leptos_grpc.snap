@@ -3,10 +3,11 @@ source: src/templates/engine.rs
 expression: "snapshot_output(&fullstack_spec_featured(Backend::Axum, Frontend::Leptos,\nvec![Feature::gRPC],))"
 ---
 === .dockerignore ===
-# Keep the build context small: cargo-leptos output under target/ is
-# rebuilt inside the image.
+# Keep the build context small and secrets out of image layers:
+# cargo-leptos output under target/ is rebuilt inside the image.
 .git
 /target
+.env
 
 === .env.example ===
 DATABASE_URL=postgres://postgres:postgres@localhost/sample_app

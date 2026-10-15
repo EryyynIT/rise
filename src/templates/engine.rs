@@ -147,6 +147,9 @@ fn template_plan(spec: &ProjectSpec, name: &ProjectName) -> Result<Vec<TemplateS
         )]),
         ProjectSpec::WebApp(WebAppSpec::Frontend(frontend)) => match frontend.frontend {
             Frontend::Yew => Ok(vec![TemplateStep::root("frontend-yew", name)]),
+            // Frontend-only Leptos is a client-side rendered SPA built with
+            // trunk — a different template from the cargo-leptos fullstack.
+            Frontend::Leptos => Ok(vec![TemplateStep::root("frontend-leptos", name)]),
             other => Err(Error::TemplateNotFound(format!(
                 "web-{}",
                 other.to_string().to_lowercase()
@@ -524,11 +527,19 @@ mod tests {
     }
 
     #[test]
-    fn other_frontend_only_stacks_are_template_not_found() {
+    fn leptos_frontend_plans_the_csr_template() {
         let name = project_name("app");
         let spec = frontend_spec(Frontend::Leptos, Deployment::SelfHosted);
-        let err = template_plan(&spec, &name).expect_err("no leptos template yet");
-        assert!(matches!(err, Error::TemplateNotFound(id) if id == "web-leptos"));
+        let plan = template_plan(&spec, &name).expect("plan");
+        assert_eq!(plan, vec![TemplateStep::root("frontend-leptos", &name)]);
+    }
+
+    #[test]
+    fn other_frontend_only_stacks_are_template_not_found() {
+        let name = project_name("app");
+        let spec = frontend_spec(Frontend::Seed, Deployment::SelfHosted);
+        let err = template_plan(&spec, &name).expect_err("no seed template yet");
+        assert!(matches!(err, Error::TemplateNotFound(id) if id == "web-seed"));
     }
 
     #[test]

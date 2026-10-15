@@ -48,7 +48,10 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
     init_git(&path);
 
     let wasm_frontend = match &spec {
-        ProjectSpec::WebApp(WebAppSpec::Frontend(frontend)) => frontend.frontend == Frontend::Yew,
+        // Frontend-only Yew and Leptos are both trunk-built SPAs.
+        ProjectSpec::WebApp(WebAppSpec::Frontend(frontend)) => {
+            matches!(frontend.frontend, Frontend::Yew | Frontend::Leptos)
+        }
         ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack)) => {
             fullstack.frontend == Frontend::Yew
         }

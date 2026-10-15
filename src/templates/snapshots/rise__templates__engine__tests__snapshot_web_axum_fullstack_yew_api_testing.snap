@@ -101,7 +101,7 @@ tower-http = { version = "0.6", features = ["fs"] }
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }
 
 [dev-dependencies]
-tower = "0.5"
+tower = { version = "0.5", features = ["util"] }
 
 === backend/src/db.rs ===
 //! Database connection pool (sqlx + Postgres).

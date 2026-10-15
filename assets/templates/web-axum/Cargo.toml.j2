@@ -55,7 +55,7 @@ tonic-prost-build = "0.14"
 
 [dev-dependencies]
 {%- if 'api' in backend.testing %}
-tower = "0.5"
+tower = { version = "0.5", features = ["util"] }
 {%- endif %}
 {%- if 'mock' in backend.testing %}
 mockall = "0.13"

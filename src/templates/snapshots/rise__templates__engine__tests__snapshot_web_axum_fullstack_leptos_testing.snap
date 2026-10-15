@@ -52,7 +52,7 @@ ssr = [
 
 # tower's oneshot drives the server-function API test in main.rs.
 [dev-dependencies]
-tower = "0.5"
+tower = { version = "0.5", features = ["util"] }
 
 # Size-optimized profile for the WASM bundle in release mode.
 [profile.wasm-release]

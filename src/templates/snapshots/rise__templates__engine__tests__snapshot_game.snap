@@ -67,16 +67,19 @@ async fn main() {
         player.x = player.x.clamp(PLAYER_RADIUS, screen_width() - PLAYER_RADIUS);
         player.y = player.y.clamp(PLAYER_RADIUS, screen_height() - PLAYER_RADIUS);
 
-        // Spawn new coins on a timer.
-        spawn_timer -= dt;
-        if spawn_timer <= 0.0 && coins.len() < MAX_COINS {
-            coins.push(Coin {
-                position: vec2(
-                    rand::gen_range(COIN_RADIUS, screen_width() - COIN_RADIUS),
-                    rand::gen_range(COIN_RADIUS, screen_height() - COIN_RADIUS),
-                ),
-            });
-            spawn_timer = COIN_SPAWN_SECONDS;
+        // Spawn new coins on a timer. The clock pauses while the coin cap
+        // is full, so collecting one never spawns its replacement at once.
+        if coins.len() < MAX_COINS {
+            spawn_timer -= dt;
+            if spawn_timer <= 0.0 {
+                coins.push(Coin {
+                    position: vec2(
+                        rand::gen_range(COIN_RADIUS, screen_width() - COIN_RADIUS),
+                        rand::gen_range(COIN_RADIUS, screen_height() - COIN_RADIUS),
+                    ),
+                });
+                spawn_timer = COIN_SPAWN_SECONDS;
+            }
         }
 
         // Collect the coins the player touches.

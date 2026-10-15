@@ -1,0 +1,32 @@
+//! gRPC API: the Greeter service, generated from `proto/hello.proto`.
+
+use tonic::{Request, Response, Status};
+
+tonic::include_proto!("hello");
+
+/// Greeter service implementation.
+#[derive(Debug, Default)]
+pub struct GreeterImpl;
+
+#[tonic::async_trait]
+impl greeter_server::Greeter for GreeterImpl {
+    async fn say_hello(
+        &self,
+        request: Request<HelloRequest>,
+    ) -> Result<Response<HelloReply>, Status> {
+        let reply = HelloReply {
+            message: format!("Hello from {{ name }}, {}!", request.into_inner().name),
+        };
+        Ok(Response::new(reply))
+    }
+}
+
+/// Serve the gRPC API on its own port, next to the HTTP server.
+pub async fn serve() -> Result<(), tonic::transport::Error> {
+    let addr = "0.0.0.0:50051".parse().expect("valid gRPC address");
+    println!("gRPC listening on http://localhost:50051");
+    tonic::transport::Server::builder()
+        .add_service(greeter_server::GreeterServer::new(GreeterImpl))
+        .serve(addr)
+        .await
+}

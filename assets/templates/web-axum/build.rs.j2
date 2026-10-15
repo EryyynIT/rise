@@ -1,0 +1,6 @@
+fn main() {
+    // Requires protoc (the Protocol Buffers compiler) on the system:
+    // https://grpc.io/docs/protoc-installation/
+    tonic_build::compile_protos("proto/hello.proto")
+        .expect("failed to compile proto/hello.proto — is protoc installed?");
+}

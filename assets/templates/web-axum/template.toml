@@ -14,3 +14,8 @@ Dockerfile = "backend.deployment != 'docker' or workspace"
 # every other frontend (or none) ships neither.
 "templates/index.html" = "frontend not in ['askama', 'tera', 'minijinja']"
 "templates/index.hbs" = "frontend != 'handlebars'"
+# The gRPC service definition, its build script and the service module only
+# exist with the feature.
+"build.rs" = "'grpc' not in backend.features"
+"proto/hello.proto" = "'grpc' not in backend.features"
+"src/grpc.rs" = "'grpc' not in backend.features"

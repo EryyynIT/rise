@@ -1,0 +1,158 @@
+---
+source: src/templates/engine.rs
+expression: "snapshot_output(&backend_spec_full(Backend::Axum, Database::SQLx,\nDeployment::Docker, vec![], vec![Feature::gRPC],))"
+---
+=== .dockerignore ===
+# Keep the build context small and secrets out of image layers.
+.git
+/target
+.env
+
+=== .env.example ===
+DATABASE_URL=postgres://postgres:postgres@localhost/sample_app
+
+=== .gitignore ===
+/target
+.env
+
+=== Cargo.toml ===
+[package]
+name = "sample-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+# Loads .env (DATABASE_URL & co.) into the environment at startup.
+dotenvy = "0.15"
+tonic = "0.14"
+prost = "0.14"
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }
+
+[build-dependencies]
+tonic-build = "0.14"
+
+=== Dockerfile ===
+FROM rust:1-slim AS builder
+WORKDIR /app
+# tonic-build compiles proto/hello.proto with protoc at build time.
+RUN apt-get update && apt-get install -y --no-install-recommends protobuf-compiler && rm -rf /var/lib/apt/lists/*
+COPY . .
+RUN cargo build --release
+
+FROM debian:bookworm-slim
+COPY --from=builder /app/target/release/sample-app /usr/local/bin/app
+EXPOSE 3000
+EXPOSE 50051
+CMD ["app"]
+
+=== build.rs ===
+fn main() {
+    // Requires protoc (the Protocol Buffers compiler) on the system:
+    // https://grpc.io/docs/protoc-installation/
+    tonic_build::compile_protos("proto/hello.proto")
+        .expect("failed to compile proto/hello.proto — is protoc installed?");
+}
+
+=== proto/hello.proto ===
+syntax = "proto3";
+
+package hello;
+
+// The greeting service.
+service Greeter {
+  rpc SayHello (HelloRequest) returns (HelloReply);
+}
+
+message HelloRequest {
+  string name = 1;
+}
+
+message HelloReply {
+  string message = 1;
+}
+
+=== src/db.rs ===
+//! Database connection pool (sqlx + Postgres).
+
+use sqlx::{PgPool, postgres::PgPoolOptions};
+
+/// Build a connection pool from the `DATABASE_URL` environment variable.
+///
+/// Copy `.env.example` to `.env` and adjust the URL for your database.
+/// Queries use sqlx's runtime-checked API, so the project compiles without
+/// a live database; `DATABASE_URL` is only needed at run time.
+pub async fn create_pool() -> Result<PgPool, sqlx::Error> {
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&database_url)
+        .await
+}
+
+=== src/grpc.rs ===
+//! gRPC API: the Greeter service, generated from `proto/hello.proto`.
+
+use tonic::{Request, Response, Status};
+
+tonic::include_proto!("hello");
+
+/// Greeter service implementation.
+#[derive(Debug, Default)]
+pub struct GreeterImpl;
+
+#[tonic::async_trait]
+impl greeter_server::Greeter for GreeterImpl {
+    async fn say_hello(
+        &self,
+        request: Request<HelloRequest>,
+    ) -> Result<Response<HelloReply>, Status> {
+        let reply = HelloReply {
+            message: format!("Hello from sample-app, {}!", request.into_inner().name),
+        };
+        Ok(Response::new(reply))
+    }
+}
+
+/// Serve the gRPC API on its own port, next to the HTTP server.
+pub async fn serve() -> Result<(), tonic::transport::Error> {
+    let addr = "0.0.0.0:50051".parse().expect("valid gRPC address");
+    println!("gRPC listening on http://localhost:50051");
+    tonic::transport::Server::builder()
+        .add_service(greeter_server::GreeterServer::new(GreeterImpl))
+        .serve(addr)
+        .await
+}
+
+=== src/main.rs ===
+use axum::{Router, routing::get};
+
+mod db;
+mod grpc;
+
+#[tokio::main]
+async fn main() {
+    // Loads .env when present (DATABASE_URL & co.); absent is fine.
+    let _ = dotenvy::dotenv();
+    let app = Router::new().route("/", get(root));
+    let db = db::create_pool().await.expect("failed to connect to database");
+    let app = app.with_state(db);
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
+        .await
+        .expect("failed to bind port 3000");
+
+    println!("listening on http://localhost:3000");
+    // The gRPC API runs on its own port, next to the HTTP server.
+    tokio::spawn(async {
+        if let Err(err) = grpc::serve().await {
+            eprintln!("gRPC server error: {err}");
+        }
+    });
+    axum::serve(listener, app).await.expect("server error");
+}
+
+async fn root() -> &'static str {
+    "Hello from sample-app!"
+}

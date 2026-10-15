@@ -41,6 +41,9 @@ use std::sync::LazyLock;
 {%- endif %}
 
 mod db;
+{%- if 'grpc' in backend.features %}
+mod grpc;
+{%- endif %}
 
 #[tokio::main]
 async fn main() {
@@ -103,6 +106,14 @@ async fn main() {
         .expect("failed to bind port 3000");
 
     println!("listening on http://localhost:3000");
+{%- if 'grpc' in backend.features %}
+    // The gRPC API runs on its own port, next to the HTTP server.
+    tokio::spawn(async {
+        if let Err(err) = grpc::serve().await {
+            eprintln!("gRPC server error: {err}");
+        }
+    });
+{%- endif %}
 {%- if 'rate-limiting' in backend.features %}
     // The per-IP rate limiter needs the peer address of each connection.
     axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())

@@ -19,6 +19,10 @@ tower_governor = "0.8"
 async-graphql = "7"
 async-graphql-axum = "7"
 {%- endif %}
+{%- if 'grpc' in backend.features %}
+tonic = "0.14"
+prost = "0.14"
+{%- endif %}
 {%- if frontend == 'yew' %}
 tower-http = { version = "0.6", features = ["fs"] }
 {%- endif %}
@@ -40,6 +44,11 @@ diesel = { version = "2", features = ["postgres", "r2d2"] }
 sea-orm = { version = "1", features = ["sqlx-postgres", "runtime-tokio-rustls"] }
 {%- elif backend.database == 'sled' %}
 sled = "0.34"
+{%- endif %}
+{%- if 'grpc' in backend.features %}
+
+[build-dependencies]
+tonic-build = "0.14"
 {%- endif %}
 {%- if 'api' in backend.testing or 'mock' in backend.testing %}
 

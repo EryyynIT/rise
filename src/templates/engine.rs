@@ -1256,6 +1256,17 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_web_axum_grpc() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Axum,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![],
+            vec![Feature::gRPC],
+        )));
+    }
+
+    #[test]
     fn snapshot_web_actix_graphql() {
         insta::assert_snapshot!(snapshot_output(&backend_spec_full(
             Backend::Actix,

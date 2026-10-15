@@ -288,6 +288,45 @@ fn new_with_graphql_adds_schema_and_graphiql() {
 }
 
 #[test]
+fn new_with_grpc_generates_a_tonic_service() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "grpc-app",
+            "--backend",
+            "axum",
+            "--db",
+            "sqlx",
+            "--deployment",
+            "docker",
+            "--features",
+            "grpc",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("protoc"));
+
+    let project = tmp.path().join("grpc-app");
+    let proto = std::fs::read_to_string(project.join("proto/hello.proto")).expect("read proto");
+    assert!(proto.contains("service Greeter"));
+    let build_rs = std::fs::read_to_string(project.join("build.rs")).expect("read build.rs");
+    assert!(build_rs.contains("tonic_build::compile_protos"));
+    let grpc_rs = std::fs::read_to_string(project.join("src/grpc.rs")).expect("read grpc.rs");
+    assert!(grpc_rs.contains("GreeterImpl"));
+    let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read Cargo.toml");
+    assert!(cargo_toml.contains("tonic"));
+    assert!(cargo_toml.contains("[build-dependencies]"));
+    let dockerfile = std::fs::read_to_string(project.join("Dockerfile")).expect("read Dockerfile");
+    assert!(dockerfile.contains("protobuf-compiler"));
+    assert!(dockerfile.contains("EXPOSE 50051"));
+}
+
+#[test]
 fn sqlx_testing_without_sqlx_database_is_rejected() {
     Command::cargo_bin("rise")
         .expect("binary")

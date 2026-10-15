@@ -1,13 +1,11 @@
 //! rise — interactive scaffolding for Rust projects.
 
-use colored::Colorize;
+use colored::{Colorize, CustomColor};
 
 use crate::cli::{Command, NewArgs};
-use crate::color::{FERRIS_TEAL, RUST_ORANGE, STEEL_GRAY};
 use crate::spec::{Database, Feature, Frontend, ProjectSpec, WebAppSpec};
 
 mod cli;
-mod color;
 mod error;
 mod name;
 mod spec;
@@ -186,12 +184,13 @@ fn print_out(bytes: &[u8]) -> Result<(), Error> {
 /// The rise banner: crab, name, tagline. Purely decorative: a stdout
 /// failure here must not abort the run.
 fn print_banner() {
+    // Brand colors: rust orange, ferris teal, steel gray.
     let _ = print_out(
         format!(
             "{}  {}\n    {}\n",
-            "🦀".custom_color(RUST_ORANGE),
-            "rise (rust initial setup engine)".custom_color(FERRIS_TEAL),
-            "fast, idiomatic, async Rust scaffolding".custom_color(STEEL_GRAY)
+            "🦀".custom_color(CustomColor::new(247, 76, 0)),
+            "rise (rust initial setup engine)".custom_color(CustomColor::new(0, 163, 163)),
+            "fast, idiomatic, async Rust scaffolding".custom_color(CustomColor::new(51, 51, 51))
         )
         .as_bytes(),
     );

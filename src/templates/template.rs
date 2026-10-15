@@ -290,6 +290,7 @@ Dockerfile = "spec.WebApp.Backend.deployment != 'docker'"
             names,
             [
                 "cli",
+                "frontend-leptos",
                 "frontend-yew",
                 "library",
                 "web-actix",

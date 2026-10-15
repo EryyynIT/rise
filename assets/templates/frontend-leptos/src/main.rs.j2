@@ -1,0 +1,18 @@
+use leptos::prelude::*;
+
+/// Root component.
+#[component]
+fn App() -> impl IntoView {
+    let count = RwSignal::new(0);
+    let on_click = move |_| *count.write() += 1;
+
+    view! {
+        <h1>"Hello from {{ name }}!"</h1>
+        <button on:click=on_click>"Click Me: " {count}</button>
+    }
+}
+
+fn main() {
+    console_error_panic_hook::set_once();
+    leptos::mount::mount_to_body(App);
+}

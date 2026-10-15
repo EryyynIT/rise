@@ -1,0 +1,11 @@
+# Build the WASM bundle with trunk.
+FROM rust:1-slim AS builder
+RUN cargo install --locked trunk && rustup target add wasm32-unknown-unknown
+WORKDIR /app
+COPY . .
+RUN trunk build --release
+
+# Serve the static bundle.
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+EXPOSE 80

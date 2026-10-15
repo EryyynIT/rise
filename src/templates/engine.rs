@@ -1433,6 +1433,24 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_web_axum_fullstack_yew_grpc() {
+        // gRPC in a WASM workspace: the root Dockerfile builds the backend,
+        // so it is the file that must install protobuf-compiler.
+        insta::assert_snapshot!(snapshot_output(&ProjectSpec::WebApp(
+            WebAppSpec::Fullstack(FullstackSpec {
+                frontend: Frontend::Yew,
+                backend: BackendSpec {
+                    backend: Backend::Axum,
+                    database: Database::SQLx,
+                    deployment: Deployment::Docker,
+                    testing: vec![],
+                    features: vec![Feature::gRPC],
+                },
+            })
+        )));
+    }
+
+    #[test]
     fn snapshot_web_axum_fullstack_leptos() {
         insta::assert_snapshot!(snapshot_output(&fullstack_spec(
             Backend::Axum,

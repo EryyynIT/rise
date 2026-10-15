@@ -13,6 +13,10 @@ WORKDIR /build
 # Diesel links against libpq.
 RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev && rm -rf /var/lib/apt/lists/*
 {%- endif %}
+{%- if 'grpc' in backend.features %}
+# tonic-prost-build compiles proto/hello.proto with protoc at build time.
+RUN apt-get update && apt-get install -y --no-install-recommends protobuf-compiler && rm -rf /var/lib/apt/lists/*
+{%- endif %}
 COPY . .
 COPY --from=frontend-builder /build/frontend/dist ./frontend/dist
 RUN cargo build --release -p {{ name }}-backend
@@ -26,4 +30,7 @@ WORKDIR /app
 COPY --from=backend-builder /build/target/release/{{ name }}-backend /usr/local/bin/app
 COPY --from=backend-builder /build/frontend/dist ./frontend/dist
 EXPOSE 3000
+{%- if 'grpc' in backend.features %}
+EXPOSE 50051
+{%- endif %}
 CMD ["app"]

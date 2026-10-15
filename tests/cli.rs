@@ -381,6 +381,85 @@ fn new_generates_actix_project_without_prompts() {
 }
 
 #[test]
+fn new_generates_rocket_project_without_prompts() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "sample-rocket",
+            "--backend",
+            "rocket",
+            "--db",
+            "sqlx",
+            "--deployment",
+            "docker",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("created ./sample-rocket"))
+        .stdout(predicate::str::contains(".env.example"));
+
+    let project = tmp.path().join("sample-rocket");
+    let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read Cargo.toml");
+    assert!(cargo_toml.contains("rocket"));
+    assert!(project.join("src/db.rs").exists());
+    assert!(project.join(".env.example").exists());
+    let main_rs = std::fs::read_to_string(project.join("src/main.rs")).expect("read main.rs");
+    assert!(main_rs.contains("Hello from sample-rocket!"));
+    // The other backends listen on :3000; rocket's defaults are
+    // 127.0.0.1:8000, so the generated app overrides both.
+    assert!(main_rs.contains("port: 3000"));
+    assert!(main_rs.contains("Ipv4Addr::UNSPECIFIED"));
+    assert!(project.join("Dockerfile").exists());
+}
+
+#[test]
+fn new_with_rocket_renders_every_feature() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "rocket-kitchen-sink",
+            "--backend",
+            "rocket",
+            "--db",
+            "sqlx",
+            "--deployment",
+            "docker",
+            "--testing",
+            "api,sqlx",
+            "--features",
+            "web-sockets,rate-limiting,graph-ql,grpc",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("protoc"));
+
+    let project = tmp.path().join("rocket-kitchen-sink");
+    let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read Cargo.toml");
+    assert!(cargo_toml.contains("rocket_ws"));
+    assert!(cargo_toml.contains("async-graphql-rocket"));
+    assert!(cargo_toml.contains("tonic"));
+    let main_rs = std::fs::read_to_string(project.join("src/main.rs")).expect("read main.rs");
+    assert!(main_rs.contains("routes![ws_echo]"));
+    assert!(main_rs.contains("graphql_query"));
+    assert!(main_rs.contains("rate_limit::RateLimit::new()"));
+    assert!(main_rs.contains("grpc::serve()"));
+    assert!(main_rs.contains("rocket::local::blocking::Client"));
+    assert!(project.join("src/rate_limit.rs").exists());
+    assert!(project.join("src/grpc.rs").exists());
+    assert!(project.join("proto/hello.proto").exists());
+}
+
+#[test]
 fn new_generates_cli_project_without_prompts() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
@@ -740,6 +819,47 @@ fn new_generates_actix_yew_workspace_without_prompts() {
 }
 
 #[test]
+fn new_generates_rocket_yew_workspace_without_prompts() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "rocket-wasm",
+            "--backend",
+            "rocket",
+            "--frontend",
+            "yew",
+            "--db",
+            "sled",
+            "--deployment",
+            "self-hosted",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let project = tmp.path().join("rocket-wasm");
+    let backend =
+        std::fs::read_to_string(project.join("backend/Cargo.toml")).expect("read backend");
+    assert!(backend.contains("rocket"));
+    let main_rs =
+        std::fs::read_to_string(project.join("backend/src/main.rs")).expect("read main.rs");
+    assert!(main_rs.contains("/api/hello"));
+    // Rocket has no static-serving responder of the axum/actix kind: the
+    // built bundle is mounted through rocket's FileServer, with an
+    // index.html fallback for SPA routes.
+    assert!(main_rs.contains("FileServer::from(\"frontend/dist\")"));
+    assert!(main_rs.contains("spa_fallback"));
+    assert!(
+        !project.join("Dockerfile").exists(),
+        "self-hosted excludes it"
+    );
+}
+
+#[test]
 fn fullstack_with_other_wasm_frontends_is_an_actionable_error() {
     Command::cargo_bin("rise")
         .expect("binary")
@@ -759,6 +879,30 @@ fn fullstack_with_other_wasm_frontends_is_an_actionable_error() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("web-fullstack-seed"));
+}
+
+#[test]
+fn leptos_with_a_rocket_backend_is_an_actionable_error() {
+    // Leptos integrates with axum and actix only. The wizard hides the
+    // choice; a flag still reports the template it would have needed.
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "rocket-leptos",
+            "--backend",
+            "rocket",
+            "--frontend",
+            "leptos",
+            "--db",
+            "sqlx",
+            "--deployment",
+            "docker",
+            "--no-input",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("web-leptos-rocket"));
 }
 
 #[test]

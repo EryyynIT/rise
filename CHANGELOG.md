@@ -26,6 +26,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   layer to mock — with a dedicated "testing options not available for
   this stack" error.
 
+### Changed
+
+- The wizard now offers only stacks that have templates: `axum`/`actix`
+  backends, the `web`/`cli`/`library` kinds, `yew`/`leptos` for
+  frontend-only apps plus the four template engines with a backend.
+  Previously most offered choices (five of seven backends, the embedded
+  and game kinds, seven of nine frontend-only options) walked the user
+  through the whole questionnaire and failed at generation. Explicit
+  flags for unimplemented stacks still get the typed "not available yet"
+  error.
+- The wizard's testing options follow the chosen database: the `sqlx`
+  pool test is offered only with the sqlx database (it silently rendered
+  nothing with another one when picked interactively).
+- Yew fullstack next steps copy `.env.example` to the workspace root, not
+  `backend/`: `dotenvy` searches the working directory and its parents,
+  and the printed `cargo run -p <name>-backend` runs from the root, so
+  the old location was never found and the app panicked on
+  `DATABASE_URL`.
+
+### Removed
+
+- `--testing mock`: it emitted a dead `mockall` dev-dependency with no
+  mock-based test anywhere (the generated code has no trait seam to
+  mock). The value is now rejected up front on every stack with the
+  "testing options not available for this stack" error.
+- `--deployment kubernetes` and `--deployment serverless`: they generated
+  byte-identical output to `self-hosted` — only `docker` adds files.
+
+### Fixed
+
+- The leptos templates' `.dockerignore` now excludes `.env`: both
+  Dockerfiles `COPY . .` into the builder stage, so a real
+  `DATABASE_URL` leaked into the build context and builder-stage layers.
+- The actix and leptos-actix rate limiting now spawns the periodic
+  limiter cleanup task the axum templates already had — the governor's
+  per-IP state store grew unboundedly without it.
+- Project names that are Windows device names (`con`, `aux`, `nul`,
+  `com1`–`com9`, `lpt1`–`lpt9`) are rejected at validation instead of
+  failing with an obscure OS error when the directory is created.
+
 ## [0.6.0] - 2026-10-15
 
 ### Added

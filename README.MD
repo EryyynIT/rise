@@ -54,8 +54,8 @@ Everything the wizard asks is also a flag on `rise new`:
 | `--backend` | `axum`, `actix` | alone → backend-only; with `--frontend` → fullstack |
 | `--frontend` | `yew`, `leptos`, `askama`, `tera`, `minijinja`, `handlebars` | `yew` → WASM SPA (alone) or workspace member (with a backend); `leptos` → trunk-built csr SPA (alone) or a single-crate SSR + hydration app built with cargo-leptos (with a backend); the rest are server-side template engines |
 | `--db` | `sqlx`, `diesel`, `sea-orm`, `sled` | wires a connection module + `.env.example` — sqlx pool, SeaORM connection, Diesel r2d2 pool, sled store; leptos apps get it in their server functions |
-| `--deployment` | `docker`, `kubernetes`, `serverless`, `self-hosted` | `docker` ships a slim multi-stage Dockerfile |
-| `--testing` | `api`, `sqlx`, `mock` | repeatable, comma-separated; adds test modules and dev-dependencies; with a leptos frontend `api` tests the server function endpoint (run `cargo test --features ssr`) and `mock` is not offered — no REST layer to mock |
+| `--deployment` | `docker`, `self-hosted` | `docker` ships a slim multi-stage Dockerfile |
+| `--testing` | `api`, `sqlx` | repeatable, comma-separated; adds test modules and dev-dependencies; with a leptos frontend `api` tests the server function endpoint (run `cargo test --features ssr`); `sqlx` needs `--db sqlx` (it tests the pool) |
 | `--features` | `web-sockets`, `grpc`, `graph-ql`, `rate-limiting` | repeatable, comma-separated; `/ws` echo endpoint, tonic gRPC Greeter on :50051 (builds need [protoc](https://grpc.io/docs/protoc-installation/)), async-graphql with GraphiQL at `/graphql`, per-IP rate limiting — all of them also next to a leptos frontend's routes |
 | `--template` | a template directory | render your own template — see [docs/TEMPLATES.md](docs/TEMPLATES.md) |
 | `--no-input` | | never prompt; a non-terminal stdin implies this |
@@ -123,11 +123,9 @@ The goal is to support multiple kinds of Rust projects with plug-and-play templa
 
 Bring your own templates or use the ones bundled in. The vision is modular, and as little boilerplate pain as possible.
 
-Things are moving fast. Expect rough edges, TODOs, and probably a few panics. Contributions, feedback, and chaos-testing welcome.
+Things are moving fast. Expect rough edges. Contributions, feedback, and chaos-testing welcome.
 
 It's not official. It's better.
-
-Let me know if you want badges, install sections for the future, or a snarkier "FAQ" for people who inevitably ask why it's not on crates.io yet.
 
 ## 💻 Contributing
 

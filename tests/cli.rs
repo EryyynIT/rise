@@ -454,6 +454,7 @@ fn new_generates_embedded_project_without_prompts() {
         .assert()
         .success()
         .stdout(predicate::str::contains("created ./blink"))
+        .stdout(predicate::str::contains("probe-rs"))
         .stdout(predicate::str::contains("cargo run"));
 
     let project = tmp.path().join("blink");

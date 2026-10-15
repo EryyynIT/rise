@@ -103,6 +103,12 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
     }
     match &spec {
         ProjectSpec::Library => out.push_str("  cargo test\n"),
+        ProjectSpec::Embedded => {
+            out.push_str("  rustup target add thumbv7em-none-eabihf  # one-time\n");
+            out.push_str("  cargo install probe-rs-tools --locked    # one-time\n");
+            out.push_str("  # point .cargo/config.toml and memory.x at your MCU, then:\n");
+            out.push_str("  cargo run  # flashes the firmware, shows defmt logs\n");
+        }
         _ if fullstack_wasm => {
             out.push_str(&format!(
                 "  cargo run -p {name}-backend  # terminal 1: API on :3000\n"

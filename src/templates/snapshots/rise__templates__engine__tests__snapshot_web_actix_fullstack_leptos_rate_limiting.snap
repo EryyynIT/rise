@@ -254,6 +254,14 @@ async fn main() -> std::io::Result<()> {
         .burst_size(50)
         .finish()
         .expect("valid rate limiter configuration");
+    // Governor's storage grows unboundedly without periodic cleanup.
+    let limiter = governor_conf.limiter();
+    actix_web::rt::spawn(async move {
+        loop {
+            actix_web::rt::time::sleep(std::time::Duration::from_secs(60)).await;
+            limiter.retain_recent();
+        }
+    });
     let db = db::create_pool().await.expect("failed to connect to database");
     HttpServer::new(move || {
         // Generate the list of routes in your Leptos app.

@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Testing and features for Leptos fullstack apps: `--testing` and
+  `--features` are no longer rejected with `--frontend leptos`, and the
+  wizard asks those questions for leptos too. `api` generates an
+  ssr-gated test that POSTs to the generated server function's endpoint
+  (live for sled, `#[ignore]`d for the Postgres databases, mirroring the
+  REST templates); `sqlx` generates the pool test. All four features work
+  next to the leptos routes: `web-sockets` (axum `ws` route / actix-ws
+  service), `rate-limiting` (tower_governor / actix-governor around the
+  leptos router), `graph-ql` (POST /graphql + GraphiQL; the schema is a
+  request extension on axum, an `app_data` on actix) and `grpc` (the
+  tonic Greeter on :50051, protoc prerequisite and Dockerfile wiring like
+  the REST templates). Everything server-side is optional and gated on
+  the `ssr` feature, so the hydrate/WASM build never sees it.
+  `--testing mock` stays rejected for leptos — a Leptos app has no REST
+  layer to mock — with a dedicated "testing options not available for
+  this stack" error.
+
 ## [0.6.0] - 2026-10-15
 
 ### Added

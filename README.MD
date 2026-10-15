@@ -55,8 +55,8 @@ Everything the wizard asks is also a flag on `rise new`:
 | `--frontend` | `yew`, `leptos`, `askama`, `tera`, `minijinja`, `handlebars` | `yew` → WASM SPA (alone) or workspace member (with a backend); `leptos` → trunk-built csr SPA (alone) or a single-crate SSR + hydration app built with cargo-leptos (with a backend); the rest are server-side template engines |
 | `--db` | `sqlx`, `diesel`, `sea-orm`, `sled` | wires a connection module + `.env.example` — sqlx pool, SeaORM connection, Diesel r2d2 pool, sled store; leptos apps get it in their server functions |
 | `--deployment` | `docker`, `kubernetes`, `serverless`, `self-hosted` | `docker` ships a slim multi-stage Dockerfile |
-| `--testing` | `api`, `sqlx`, `mock` | repeatable, comma-separated; adds test modules and dev-dependencies; not supported with a leptos frontend yet |
-| `--features` | `web-sockets`, `grpc`, `graph-ql`, `rate-limiting` | repeatable, comma-separated; `/ws` echo endpoint, tonic gRPC Greeter on :50051 (builds need [protoc](https://grpc.io/docs/protoc-installation/)), async-graphql with GraphiQL at `/graphql`, per-IP rate limiting; not supported with a leptos frontend yet |
+| `--testing` | `api`, `sqlx`, `mock` | repeatable, comma-separated; adds test modules and dev-dependencies; with a leptos frontend `api` tests the server function endpoint (run `cargo test --features ssr`) and `mock` is not offered — no REST layer to mock |
+| `--features` | `web-sockets`, `grpc`, `graph-ql`, `rate-limiting` | repeatable, comma-separated; `/ws` echo endpoint, tonic gRPC Greeter on :50051 (builds need [protoc](https://grpc.io/docs/protoc-installation/)), async-graphql with GraphiQL at `/graphql`, per-IP rate limiting — all of them also next to a leptos frontend's routes |
 | `--template` | a template directory | render your own template — see [docs/TEMPLATES.md](docs/TEMPLATES.md) |
 | `--no-input` | | never prompt; a non-terminal stdin implies this |
 
@@ -64,7 +64,8 @@ What generates today: Axum and Actix Web backends, fullstack variants of both
 with the four template engines above, a Yew WASM frontend (a cargo workspace
 where the backend serves the API and the built frontend bundle) or a Leptos
 frontend (a single crate built with cargo-leptos — server-side rendering plus
-hydration, database wired into server functions), frontend-only Yew and Leptos
+hydration, database wired into server functions, the same testing and feature
+options as the REST backends), frontend-only Yew and Leptos
 SPAs built with trunk, plus `--kind cli` and `--kind library`.
 Other combinations the flags accept (`rocket`, `seed`, `embedded`, `game`, ...)
 end with a typed "not available yet" error — that's the roadmap, not a broken
@@ -109,7 +110,7 @@ Selection for:
 - More, you're free to give more ideas!
 
 Generation for:
--[/] WebApps (backend-only Axum and Actix Web — database wiring, tests, WebSockets, GraphQL and rate limiting generated from your choices — fullstack with Askama, Tera, Minijinja or Handlebars, Leptos SSR + hydration apps built with cargo-leptos (database wired into server functions), and Yew or Leptos WASM frontends: standalone trunk SPAs or — Yew — a fullstack workspace)
+-[/] WebApps (backend-only Axum and Actix Web — database wiring, tests, WebSockets, gRPC, GraphQL and rate limiting generated from your choices — fullstack with Askama, Tera, Minijinja or Handlebars, Leptos SSR + hydration apps built with cargo-leptos (database wired into server functions, same tests and features), and Yew or Leptos WASM frontends: standalone trunk SPAs or — Yew — a fullstack workspace)
 -[x] CLI
 -[] Gamedev
 -[] Embedded

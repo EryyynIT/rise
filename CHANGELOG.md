@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `--backend rocket`: a new `web-rocket` template scaffolds a Rocket 0.5
+  backend with the same content depth as the Axum/Actix ones — all four
+  databases wired into managed state, `rocket::local::blocking::Client` API
+  tests and the sqlx pool test (no dev-dependencies needed), and every
+  feature: a `rocket_ws` echo endpoint, per-IP rate limiting (an in-process
+  request+response fairing with token buckets), async-graphql endpoints with
+  GraphiQL at `/graphql`, and the tonic Greeter on :50051. The template
+  overrides Rocket's defaults to listen on `0.0.0.0:3000`, ships `.env`
+  loading via dotenvy, Docker/Dockerfile support and the four server-side
+  template-engine frontends (askama/tera/minijinja/handlebars, templates
+  embedded via `include_str!` so the generated binary runs in the slim
+  image). As a Yew-fullstack backend member it serves `frontend/dist` with
+  a `FileServer` plus an SPA-fallback route. The wizard offers Rocket in
+  the backend prompt; Leptos is not offered for it (no integration exists)
+  and a flag-passed `--frontend leptos --backend rocket` still ends in a
+  typed `TemplateNotFound`.
 - `--kind game`: a new `game-macroquad` template generates a playable
   macroquad game — a window, a game loop with delta-time movement
   (arrows/WASD), coins spawning on a timer to collect for score. The

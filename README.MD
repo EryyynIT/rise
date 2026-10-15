@@ -50,8 +50,8 @@ Everything the wizard asks is also a flag on `rise new`:
 | Flag | Values | Notes |
 |---|---|---|
 | `NAME` | a valid crate name | positional; asked first when omitted |
-| `--kind` | `web`, `cli`, `library`, `game` | inferred as `web` when any web flag is passed |
-| `--backend` | `axum`, `actix` | alone → backend-only; with `--frontend` → fullstack |
+| `--kind` | `web`, `cli`, `library`, `game`, `embedded` | inferred as `web` when any web flag is passed |
+| `--backend` | `axum`, `actix`, `rocket` | alone → backend-only; with `--frontend` → fullstack |
 | `--frontend` | `yew`, `leptos`, `askama`, `tera`, `minijinja`, `handlebars` | `yew` → WASM SPA (alone) or workspace member (with a backend); `leptos` → trunk-built csr SPA (alone) or a single-crate SSR + hydration app built with cargo-leptos (with a backend); the rest are server-side template engines |
 | `--db` | `sqlx`, `diesel`, `sea-orm`, `sled` | wires a connection module + `.env.example` — sqlx pool, SeaORM connection, Diesel r2d2 pool, sled store; leptos apps get it in their server functions |
 | `--deployment` | `docker`, `self-hosted` | `docker` ships a slim multi-stage Dockerfile |
@@ -60,8 +60,9 @@ Everything the wizard asks is also a flag on `rise new`:
 | `--template` | a template directory | render your own template — see [docs/TEMPLATES.md](docs/TEMPLATES.md) |
 | `--no-input` | | never prompt; a non-terminal stdin implies this |
 
-What generates today: Axum and Actix Web backends, fullstack variants of both
-with the four template engines above, a Yew WASM frontend (a cargo workspace
+What generates today: Axum, Actix Web and Rocket backends, fullstack variants of
+all three with the four template engines above, a Yew WASM frontend (a cargo
+workspace
 where the backend serves the API and the built frontend bundle) or a Leptos
 frontend (a single crate built with cargo-leptos — server-side rendering plus
 hydration, database wired into server functions, the same testing and feature
@@ -71,7 +72,7 @@ SPAs built with trunk, plus `--kind cli`, `--kind library`, `--kind game`
 `--kind embedded` (bare-metal ARM Cortex-M firmware: cortex-m-rt + defmt
 logging, flashed with probe-rs — adjust `.cargo/config.toml` and `memory.x`
 to your MCU).
-Other combinations the flags accept (`rocket`, `seed`, ...)
+Other combinations the flags accept (`seed`, ...)
 end with a typed "not available yet" error — that's the roadmap, not a broken
 promise.
 
@@ -114,7 +115,7 @@ Selection for:
 - More, you're free to give more ideas!
 
 Generation for:
--[/] WebApps (backend-only Axum and Actix Web — database wiring, tests, WebSockets, gRPC, GraphQL and rate limiting generated from your choices — fullstack with Askama, Tera, Minijinja or Handlebars, Leptos SSR + hydration apps built with cargo-leptos (database wired into server functions, same tests and features), and Yew or Leptos WASM frontends: standalone trunk SPAs or — Yew — a fullstack workspace)
+-[/] WebApps (backend-only Axum, Actix Web and Rocket — database wiring, tests, WebSockets, gRPC, GraphQL and rate limiting generated from your choices — fullstack with Askama, Tera, Minijinja or Handlebars, Leptos SSR + hydration apps built with cargo-leptos (database wired into server functions, same tests and features), and Yew or Leptos WASM frontends: standalone trunk SPAs or — Yew — a fullstack workspace)
 -[x] CLI
 -[x] Gamedev
 -[x] Embedded

@@ -92,7 +92,7 @@ fn prompt_full() -> Result<WebAppSpec> {
             Ok(WebAppSpec::Backend(prompt_backend(backend)?))
         }
         WebAppKind::Frontend => {
-            let frontend = select("Select a frontend tech", frontend_options(false))?;
+            let frontend = select("Select a frontend tech", frontend_options(None))?;
             // Server-side template engines render inside whatever serves them.
             let deployment = if frontend.is_template_engine() {
                 None
@@ -109,7 +109,7 @@ fn prompt_full() -> Result<WebAppSpec> {
         }
         WebAppKind::Fullstack => {
             let backend = select("Select a backend", implemented_backends())?;
-            let frontend = select("Select a frontend tech", frontend_options(true))?;
+            let frontend = select("Select a frontend tech", frontend_options(Some(backend)))?;
             let backend = prompt_backend(backend)?;
             Ok(WebAppSpec::Fullstack(FullstackSpec { frontend, backend }))
         }
@@ -265,21 +265,21 @@ fn fill_multi<T>(
 /// The backends with templates. Flag-passed others fail at generation
 /// with a typed `TemplateNotFound`; the wizard does not offer them.
 fn implemented_backends() -> Vec<Backend> {
-    vec![Backend::Axum, Backend::Actix]
+    vec![Backend::Axum, Backend::Actix, Backend::Rocket]
 }
 
-/// The frontend choices that have templates, depending on whether a Rust
-/// backend is present. With a backend: the WASM frontends (Yew as a
-/// workspace member, Leptos integrated into the backend crate) and the
-/// server-side template engines. Without one: the standalone trunk SPAs.
-/// Other flag-passed frontends fail at generation with a typed
+/// The frontend choices that have templates, depending on the backend the
+/// user picked. Without a backend: the standalone trunk SPAs. With one:
+/// the WASM frontends and the server-side template engines — except that
+/// Leptos integrates with axum and actix only, so a rocket backend is not
+/// offered it. Other flag-passed frontends fail at generation with a typed
 /// `TemplateNotFound`.
-fn frontend_options(has_backend: bool) -> Vec<Frontend> {
+fn frontend_options(backend: Option<Backend>) -> Vec<Frontend> {
     use Frontend::*;
-    if has_backend {
-        vec![Yew, Leptos, Askama, Tera, Minijinja, Handlebars]
-    } else {
-        vec![Yew, Leptos]
+    match backend {
+        None => vec![Yew, Leptos],
+        Some(Backend::Rocket) => vec![Yew, Askama, Tera, Minijinja, Handlebars],
+        Some(_) => vec![Yew, Leptos, Askama, Tera, Minijinja, Handlebars],
     }
 }
 
@@ -289,12 +289,15 @@ mod tests {
 
     #[test]
     fn only_backends_with_templates_are_offered() {
-        assert_eq!(implemented_backends(), vec![Backend::Axum, Backend::Actix]);
+        assert_eq!(
+            implemented_backends(),
+            vec![Backend::Axum, Backend::Actix, Backend::Rocket]
+        );
     }
 
     #[test]
     fn frontend_options_with_backend() {
-        let options = frontend_options(true);
+        let options = frontend_options(Some(Backend::Axum));
         assert!(options.contains(&Frontend::Yew));
         assert!(options.contains(&Frontend::Leptos));
         assert!(options.contains(&Frontend::Askama));
@@ -306,9 +309,19 @@ mod tests {
     fn frontend_options_without_backend() {
         // Frontend-only: the standalone trunk SPAs.
         assert_eq!(
-            frontend_options(false),
+            frontend_options(None),
             vec![Frontend::Yew, Frontend::Leptos]
         );
+    }
+
+    #[test]
+    fn rocket_backend_is_not_offered_leptos() {
+        // Leptos integrates with axum and actix only: the prompt must not
+        // offer a choice that would dead-end at generation.
+        let options = frontend_options(Some(Backend::Rocket));
+        assert!(!options.contains(&Frontend::Leptos));
+        assert!(options.contains(&Frontend::Yew));
+        assert!(options.contains(&Frontend::Tera));
     }
 
     #[test]

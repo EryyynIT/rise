@@ -123,7 +123,7 @@ fn prompt_full() -> Result<WebAppSpec> {
 fn prompt_backend(backend: Backend) -> Result<BackendSpec> {
     let database = select("Select a database", Database::iter().collect())?;
     let deployment = select("Select a deployment option", Deployment::iter().collect())?;
-    let implemented_testing = implemented_testing();
+    let implemented_testing = implemented_testing(database);
     let testing = multi_select("Select testing options", implemented_testing.clone())?;
     validate_testing(&testing, &implemented_testing)?;
     let features = multi_select("Select features", implemented_features())?;
@@ -151,7 +151,7 @@ fn complete_backend(
     let deployment = fill(draft.deployment, mode, "`--deployment`", || {
         select("Select a deployment option", Deployment::iter().collect())
     })?;
-    let implemented_testing = implemented_testing();
+    let implemented_testing = implemented_testing(database);
     let testing = fill_multi(draft.testing, mode, || {
         multi_select("Select testing options", implemented_testing.clone())
     })?;
@@ -169,13 +169,19 @@ fn complete_backend(
     })
 }
 
-/// The testing options the templates render. `mock` is offered to no
-/// stack: the generated code has no trait seam for a mock to implement,
-/// so the option would emit a dead dependency and nothing else.
-/// Flag-passed values outside this list are rejected by
-/// [`validate_testing`].
-fn implemented_testing() -> Vec<Testing> {
-    vec![Testing::Api, Testing::SQLx]
+/// The testing options the templates render for the given database.
+/// `mock` is offered to no stack: the generated code has no trait seam
+/// for a mock to implement, so the option would emit a dead dependency
+/// and nothing else. `sqlx` generates a pool test, which needs a sqlx
+/// pool to exercise — the flag path rejects `--testing sqlx` with another
+/// database in `validate_flags`. Flag-passed values outside this list are
+/// rejected by [`validate_testing`].
+fn implemented_testing(database: Database) -> Vec<Testing> {
+    let mut options = vec![Testing::Api];
+    if database == Database::SQLx {
+        options.push(Testing::SQLx);
+    }
+    options
 }
 
 /// Reject testing options with no template content for the chosen stack,
@@ -347,8 +353,22 @@ mod tests {
 
     #[test]
     fn mock_testing_is_not_offered() {
-        // No template renders mock content, so no stack offers it.
-        assert_eq!(implemented_testing(), vec![Testing::Api, Testing::SQLx]);
+        // No template renders mock content, so no database offers it.
+        for database in Database::iter() {
+            assert!(!implemented_testing(database).contains(&Testing::Mock));
+        }
+    }
+
+    #[test]
+    fn sqlx_testing_is_offered_only_with_the_sqlx_database() {
+        // The sqlx pool test exercises a sqlx pool.
+        assert_eq!(
+            implemented_testing(Database::SQLx),
+            vec![Testing::Api, Testing::SQLx]
+        );
+        assert_eq!(implemented_testing(Database::Diesel), vec![Testing::Api]);
+        assert_eq!(implemented_testing(Database::SeaORM), vec![Testing::Api]);
+        assert_eq!(implemented_testing(Database::Sled), vec![Testing::Api]);
     }
 
     #[test]
@@ -363,9 +383,11 @@ mod tests {
 
     #[test]
     fn implemented_testing_passes_validation() {
-        let implemented = implemented_testing();
-        validate_testing(&implemented.clone(), &implemented)
-            .expect("the implemented list passes its own validation");
+        for database in Database::iter() {
+            let implemented = implemented_testing(database);
+            validate_testing(&implemented.clone(), &implemented)
+                .expect("the implemented list passes its own validation");
+        }
     }
 
     #[test]

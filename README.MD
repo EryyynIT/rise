@@ -56,7 +56,7 @@ Everything the wizard asks is also a flag on `rise new`:
 | `--db` | `sqlx`, `diesel`, `sea-orm`, `sled` | wires a connection module + `.env.example` — sqlx pool, SeaORM connection, Diesel r2d2 pool, sled store; leptos apps get it in their server functions |
 | `--deployment` | `docker`, `kubernetes`, `serverless`, `self-hosted` | `docker` ships a slim multi-stage Dockerfile |
 | `--testing` | `api`, `sqlx`, `mock` | repeatable, comma-separated; adds test modules and dev-dependencies; not supported with a leptos frontend yet |
-| `--features` | `web-sockets`, `graph-ql`, `rate-limiting` | repeatable, comma-separated; `/ws` echo endpoint, async-graphql with GraphiQL at `/graphql`, per-IP rate limiting; not supported with a leptos frontend yet |
+| `--features` | `web-sockets`, `grpc`, `graph-ql`, `rate-limiting` | repeatable, comma-separated; `/ws` echo endpoint, tonic gRPC Greeter on :50051 (builds need [protoc](https://grpc.io/docs/protoc-installation/)), async-graphql with GraphiQL at `/graphql`, per-IP rate limiting; not supported with a leptos frontend yet |
 | `--template` | a template directory | render your own template — see [docs/TEMPLATES.md](docs/TEMPLATES.md) |
 | `--no-input` | | never prompt; a non-terminal stdin implies this |
 

@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- gRPC for Axum and Actix Web backends: `--features grpc` generates a
+  tonic-based Greeter service (`proto/hello.proto`, `build.rs` with
+  tonic-prost-build, `src/grpc.rs`) served on port 50051 next to the HTTP
+  server. The generated project needs protoc at build time — a documented
+  prerequisite, like trunk for Yew — and its Dockerfile installs
+  `protobuf-compiler` in the builder stage. With this, every `--features`
+  value is implemented.
 - Frontend-only Leptos: `--frontend leptos` without `--backend` generates a
   client-side rendered SPA built with trunk (new embedded template
   `frontend-leptos`), and the wizard offers Leptos for frontend-only apps

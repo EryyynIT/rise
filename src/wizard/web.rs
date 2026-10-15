@@ -131,7 +131,7 @@ fn prompt_backend(backend: Backend, frontend: Option<Frontend>) -> Result<Backen
         false => {
             let testing = multi_select("Select testing options", Testing::iter().collect())?;
             let features = multi_select("Select features", implemented_features())?;
-            validate_features(&features)?;
+            validate_features(&features, &implemented_features())?;
             (testing, features)
         }
     };
@@ -171,7 +171,7 @@ fn complete_backend(
             let features = fill_multi(draft.features, mode, || {
                 multi_select("Select features", implemented_features())
             })?;
-            validate_features(&features)?;
+            validate_features(&features, &implemented_features())?;
             (testing, features)
         }
     };
@@ -184,21 +184,27 @@ fn complete_backend(
     })
 }
 
-/// The features the templates actually render. The rest of the
-/// [`Feature`] enum is the roadmap: prompts offer only implemented ones,
-/// and flag-passed values outside this list are rejected up front instead
-/// of being silently ignored.
+/// The features the templates actually render — currently every
+/// [`Feature`] variant. The list is the gate for future additions: a new
+/// variant without template content stays off the prompts, and flag-passed
+/// values are rejected up front instead of being silently ignored.
 fn implemented_features() -> Vec<Feature> {
-    vec![Feature::WebSockets, Feature::GraphQL, Feature::RateLimiting]
+    vec![
+        Feature::WebSockets,
+        Feature::gRPC,
+        Feature::GraphQL,
+        Feature::RateLimiting,
+    ]
 }
 
 /// Reject features with no template content yet, naming them by their
-/// CLI spellings.
-fn validate_features(features: &[Feature]) -> Result<()> {
+/// CLI spellings. The implemented list is a parameter so the rejection
+/// path stays testable even when every variant is implemented.
+fn validate_features(features: &[Feature], implemented: &[Feature]) -> Result<()> {
     use clap::ValueEnum;
     let unimplemented = features
         .iter()
-        .filter(|feature| !implemented_features().contains(feature))
+        .filter(|feature| !implemented.contains(feature))
         .map(|feature| {
             feature
                 .to_possible_value()
@@ -310,8 +316,13 @@ mod tests {
 
     #[test]
     fn unimplemented_features_are_rejected_by_name() {
-        let err = validate_features(&[Feature::WebSockets, Feature::gRPC])
-            .expect_err("grpc has no template content yet");
+        // The rejection path must keep working for future Feature variants
+        // even though every current one has template content.
+        let err = validate_features(
+            &[Feature::WebSockets, Feature::gRPC],
+            &[Feature::WebSockets],
+        )
+        .expect_err("grpc is not in the given implemented list");
         let Error::FeaturesNotAvailable(names) = err else {
             panic!("expected FeaturesNotAvailable");
         };
@@ -320,16 +331,24 @@ mod tests {
 
     #[test]
     fn implemented_features_pass_validation() {
-        validate_features(&[Feature::WebSockets, Feature::GraphQL, Feature::RateLimiting])
-            .expect("all implemented features pass");
-        validate_features(&[]).expect("no features is fine");
+        let implemented = implemented_features();
+        validate_features(
+            &[
+                Feature::WebSockets,
+                Feature::gRPC,
+                Feature::GraphQL,
+                Feature::RateLimiting,
+            ],
+            &implemented,
+        )
+        .expect("all implemented features pass");
+        validate_features(&[], &implemented).expect("no features is fine");
     }
 
     #[test]
-    fn prompts_offer_only_implemented_features() {
-        assert_eq!(
-            implemented_features(),
-            vec![Feature::WebSockets, Feature::GraphQL, Feature::RateLimiting]
-        );
+    fn every_feature_is_implemented() {
+        // Adding a Feature variant fails this test until the templates
+        // render it — or the offered list is knowingly shrunk.
+        assert_eq!(implemented_features(), Feature::iter().collect::<Vec<_>>());
     }
 }

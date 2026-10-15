@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Frontend-only Leptos: `--frontend leptos` without `--backend` generates a
+  client-side rendered SPA built with trunk (new embedded template
+  `frontend-leptos`), and the wizard offers Leptos for frontend-only apps
+  again.
+- Leptos fullstack apps wire the chosen database end to end: a `db` module
+  (sqlx pool, SeaORM connection, Diesel r2d2 pool or sled store),
+  `.env.example` + `.gitignore` entries, libpq in the Dockerfile for diesel,
+  and an example `#[server]` function that reads the connection from the
+  request context and streams a status string onto the home page. The wizard
+  asks for a database like for any other backend and `--db` is accepted with
+  `--frontend leptos`; `--testing`/`--features` stay rejected (they configure
+  the REST stack server functions replace).
+
+### Changed
+
+- `BackendSpec.database` is a plain `Database` again — every backend-carrying
+  spec now has one, so the field no longer needs to be optional.
+
 ## [0.5.1] - 2026-10-14
 
 ### Added

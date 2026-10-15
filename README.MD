@@ -52,8 +52,8 @@ Everything the wizard asks is also a flag on `rise new`:
 | `NAME` | a valid crate name | positional; asked first when omitted |
 | `--kind` | `web`, `cli`, `library` | inferred as `web` when any web flag is passed |
 | `--backend` | `axum`, `actix` | alone → backend-only; with `--frontend` → fullstack |
-| `--frontend` | `yew`, `leptos`, `askama`, `tera`, `minijinja`, `handlebars` | `yew` → WASM SPA (alone) or workspace member (with a backend); `leptos` → single-crate SSR + hydration app built with cargo-leptos (needs `--backend`); the rest are server-side template engines |
-| `--db` | `sqlx`, `diesel`, `sea-orm`, `sled` | wires a connection module + `.env.example` — sqlx pool, SeaORM connection, Diesel r2d2 pool, sled store; not supported with a leptos frontend yet |
+| `--frontend` | `yew`, `leptos`, `askama`, `tera`, `minijinja`, `handlebars` | `yew` → WASM SPA (alone) or workspace member (with a backend); `leptos` → trunk-built csr SPA (alone) or a single-crate SSR + hydration app built with cargo-leptos (with a backend); the rest are server-side template engines |
+| `--db` | `sqlx`, `diesel`, `sea-orm`, `sled` | wires a connection module + `.env.example` — sqlx pool, SeaORM connection, Diesel r2d2 pool, sled store; leptos apps get it in their server functions |
 | `--deployment` | `docker`, `kubernetes`, `serverless`, `self-hosted` | `docker` ships a slim multi-stage Dockerfile |
 | `--testing` | `api`, `sqlx`, `mock` | repeatable, comma-separated; adds test modules and dev-dependencies; not supported with a leptos frontend yet |
 | `--features` | `web-sockets`, `graph-ql`, `rate-limiting` | repeatable, comma-separated; `/ws` echo endpoint, async-graphql with GraphiQL at `/graphql`, per-IP rate limiting; not supported with a leptos frontend yet |
@@ -64,8 +64,8 @@ What generates today: Axum and Actix Web backends, fullstack variants of both
 with the four template engines above, a Yew WASM frontend (a cargo workspace
 where the backend serves the API and the built frontend bundle) or a Leptos
 frontend (a single crate built with cargo-leptos — server-side rendering plus
-hydration), frontend-only Yew SPAs built with trunk, plus `--kind cli` and
-`--kind library`.
+hydration, database wired into server functions), frontend-only Yew and Leptos
+SPAs built with trunk, plus `--kind cli` and `--kind library`.
 Other combinations the flags accept (`rocket`, `seed`, `embedded`, `game`, ...)
 end with a typed "not available yet" error — that's the roadmap, not a broken
 promise.
@@ -109,7 +109,7 @@ Selection for:
 - More, you're free to give more ideas!
 
 Generation for:
--[/] WebApps (backend-only Axum and Actix Web — database wiring, tests, WebSockets, GraphQL and rate limiting generated from your choices — fullstack with Askama, Tera, Minijinja or Handlebars, Leptos SSR + hydration apps built with cargo-leptos, and Yew WASM frontends: standalone trunk SPAs or a fullstack workspace)
+-[/] WebApps (backend-only Axum and Actix Web — database wiring, tests, WebSockets, GraphQL and rate limiting generated from your choices — fullstack with Askama, Tera, Minijinja or Handlebars, Leptos SSR + hydration apps built with cargo-leptos (database wired into server functions), and Yew or Leptos WASM frontends: standalone trunk SPAs or — Yew — a fullstack workspace)
 -[x] CLI
 -[] Gamedev
 -[] Embedded

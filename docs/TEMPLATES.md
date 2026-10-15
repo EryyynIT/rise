@@ -56,7 +56,7 @@ Unknown manifest fields are rejected, so typos fail loudly.
 | `name` | string | The validated project name |
 | `crate_name` | string | Package name for `Cargo.toml` and binary paths — equals `name`, except for workspace members (`<name>-backend`, `<name>-frontend`) |
 | `crate_ident` | string | `crate_name` with `-` replaced by `_` — how Rust code refers to the crate (`use my_app::...`) |
-| `backend` | object or `none` | `{ backend, database, deployment, testing, features }` — present when the spec has a backend; `database` is `none` for leptos fullstack apps |
+| `backend` | object or `none` | `{ backend, database, deployment, testing, features }` — present when the spec has a backend |
 | `frontend` | string or `none` | Kebab-case frontend id — present when the spec has a frontend |
 | `deployment` | string or `none` | The deployment choice, shape-independent (the backend's, or the frontend-only app's) |
 | `workspace` | bool | `true` when rendering a member of a multi-crate plan — the root step ships project-level files (`.gitignore`, Dockerfile), members should skip theirs |

@@ -113,15 +113,16 @@ fn resolve_kind(
     match (kind, web.any_set(), mode) {
         (Some(kind), _, _) => Ok(kind),
         (None, true, _) => Ok(ProjectKind::WebApp),
-        // Only the kinds with templates: Embedded and Game rejoin the
-        // list when their templates land; flag-passed kinds keep failing
-        // at generation with a typed TemplateNotFound.
+        // Only the kinds with templates: Embedded rejoins the list when its
+        // template lands; flag-passed kinds keep failing at generation with
+        // a typed TemplateNotFound.
         (None, false, Interaction::Interactive) => select(
             "What type of project do you want to create?",
             vec![
                 ProjectKind::WebApp,
                 ProjectKind::CliApp,
                 ProjectKind::Library,
+                ProjectKind::Game,
             ],
         ),
         (None, false, Interaction::NonInteractive) => Err(Error::MissingOptions("`--kind`".into())),

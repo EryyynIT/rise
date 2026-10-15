@@ -877,6 +877,39 @@ fn leptos_rejects_mock_testing() {
 }
 
 #[test]
+fn leptos_fullstack_renders_testing_content() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "leptos-app",
+            "--backend",
+            "axum",
+            "--frontend",
+            "leptos",
+            "--db",
+            "sqlx",
+            "--testing",
+            "api,sqlx",
+            "--deployment",
+            "self-hosted",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let main_rs =
+        std::fs::read_to_string(tmp.path().join("leptos-app/src/main.rs")).expect("read main.rs");
+    // Server-function API test (the URL comes from the generated
+    // `DatabaseStatus::PATH`) and the sqlx pool test, both ssr-gated.
+    assert!(main_rs.contains("#[cfg(all(test, feature = \"ssr\"))]"));
+    assert!(main_rs.contains("DatabaseStatus::url()"));
+    assert!(main_rs.contains("mod db_tests"));
+}
+
+#[test]
 fn new_with_template_dir_uses_the_custom_template() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let template_dir = tmp.path().join("custom-template");

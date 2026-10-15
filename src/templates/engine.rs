@@ -1505,6 +1505,31 @@ mod tests {
         )));
     }
 
+    // Testing options in a Leptos app: the server-function API test and
+    // the sqlx pool test, both gated on the `ssr` feature.
+    #[test]
+    fn snapshot_web_axum_fullstack_leptos_testing() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_full(
+            Backend::Axum,
+            Frontend::Leptos,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![Testing::Api, Testing::SQLx],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_fullstack_leptos_testing_sled() {
+        // sled runs the API test live (embedded store, no Postgres).
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_full(
+            Backend::Actix,
+            Frontend::Leptos,
+            Database::Sled,
+            Deployment::Docker,
+            vec![Testing::Api],
+        )));
+    }
+
     // The api test module switches routes under a WASM frontend.
     #[test]
     fn snapshot_web_axum_fullstack_yew_api_testing() {

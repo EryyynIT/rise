@@ -72,3 +72,92 @@ async fn main() -> std::io::Result<()> {
 pub fn main() {
     // No client-side main: the browser entry point is `hydrate` in lib.rs.
 }
+{%- if 'api' in backend.testing %}
+
+#[cfg(all(test, feature = "ssr"))]
+mod tests {
+    use actix_web::{App, http::StatusCode, test, web::Data};
+    use leptos::config::get_configuration;
+    use leptos::prelude::*;
+    use leptos::server_fn::ServerFn;
+    use leptos_actix::{LeptosRoutes, generate_route_list};
+    use leptos_meta::MetaTags;
+    use {{ crate_ident }}::app::*;
+    use {{ crate_ident }}::db;
+
+    /// The generated server function answers over HTTP end to end:
+    /// routing, the request context and the database handle. Run with
+    /// `cargo test --features ssr` (server code is gated on `ssr`).
+{%- if backend.database == 'sled' %}
+    #[actix_web::test]
+    async fn server_function_answers() {
+        // The embedded store works in tests; keep it out of the repo dir.
+        let db = sled::open(
+            std::env::temp_dir().join(format!("{{ crate_name }}-test-{}", std::process::id())),
+        )
+        .expect("open the test database");
+{%- else %}
+    #[actix_web::test]
+    #[ignore = "needs a running Postgres (set DATABASE_URL)"]
+    async fn server_function_answers() {
+{%- if backend.database == 'sqlx' %}
+        let db = db::create_pool().await.expect("connect");
+{%- elif backend.database == 'sea-orm' %}
+        let db = db::connect().await.expect("connect");
+{%- elif backend.database == 'diesel' %}
+        let db = db::create_pool();
+{%- endif %}
+{%- endif %}
+        let conf = get_configuration(None).expect("failed to load leptos configuration");
+        let leptos_options = conf.leptos_options;
+        let routes = generate_route_list(App);
+        let app = test::init_service(
+            App::new()
+                .leptos_routes_with_context(routes, move || provide_context(db.clone()), {
+                    let leptos_options = leptos_options.clone();
+                    move || {
+                        view! {
+                            <!DOCTYPE html>
+                            <html lang="en">
+                                <head>
+                                    <meta charset="utf-8"/>
+                                    <AutoReload options=leptos_options.clone() />
+                                    <HydrationScripts options=leptos_options.clone()/>
+                                    <MetaTags/>
+                                </head>
+                                <body>
+                                    <App/>
+                                </body>
+                            </html>
+                        }
+                    }
+                })
+                .app_data(Data::new(leptos_options)),
+        )
+        .await;
+        let request = test::TestRequest::post().uri(DatabaseStatus::url()).to_request();
+        let response = test::call_service(&app, request).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = test::read_body(response).await;
+        assert!(String::from_utf8_lossy(&body).contains("connected"));
+    }
+}
+{%- endif %}
+{%- if 'sqlx' in backend.testing and backend.database == 'sqlx' %}
+
+#[cfg(all(test, feature = "ssr"))]
+mod db_tests {
+    /// Exercises the pool from `src/db.rs`. Run with
+    /// `cargo test --features ssr -- --ignored` against a live database.
+    #[actix_web::test]
+    #[ignore = "needs a running Postgres (set DATABASE_URL)"]
+    async fn pool_connects() {
+        let pool = {{ crate_ident }}::db::create_pool().await.expect("connect");
+        let row: (i64,) = sqlx::query_as("SELECT 1")
+            .fetch_one(&pool)
+            .await
+            .expect("query");
+        assert_eq!(row.0, 1);
+    }
+}
+{%- endif %}

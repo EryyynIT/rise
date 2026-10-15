@@ -47,6 +47,12 @@ ssr = [
     "leptos_meta/ssr",
     "leptos_router/ssr",
 ]
+{%- if 'api' in backend.testing %}
+
+# tower's oneshot drives the server-function API test in main.rs.
+[dev-dependencies]
+tower = "0.5"
+{%- endif %}
 
 # Size-optimized profile for the WASM bundle in release mode.
 [profile.wasm-release]

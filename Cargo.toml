@@ -1,6 +1,6 @@
 [package]
 name = "rise-cli"
-version = "0.5.1"
+version = "0.6.0"
 edition = "2024"
 rust-version = "1.85"
 description = "Interactive scaffolder for new Rust projects: pick a stack, get a working project on disk"

@@ -828,6 +828,7 @@ fn leptos_fullstack_wires_the_database() {
 fn leptos_rejects_mock_testing() {
     // A Leptos app has no REST layer to mock; every other testing option
     // and every feature is accepted.
+    let tmp = tempfile::tempdir().expect("tempdir");
     Command::cargo_bin("rise")
         .expect("binary")
         .args([
@@ -845,13 +846,13 @@ fn leptos_rejects_mock_testing() {
             "docker",
             "--no-input",
         ])
+        .current_dir(tmp.path())
         .assert()
         .failure()
         .stderr(predicate::str::contains(
             "testing options not available for this stack: mock",
         ));
 
-    let tmp = tempfile::tempdir().expect("tempdir");
     Command::cargo_bin("rise")
         .expect("binary")
         .args([

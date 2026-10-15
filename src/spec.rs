@@ -10,7 +10,7 @@ use strum_macros::{Display, EnumIter};
 
 /// What kind of project to create: the `--kind` values and the wizard's
 /// first question.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, EnumIter, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, ValueEnum)]
 pub enum ProjectKind {
     /// Web application (backend, frontend or both).
     #[value(name = "web")]
@@ -74,7 +74,7 @@ pub struct FullstackSpec {
 }
 
 /// Web backend framework.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, Serialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum Backend {
     Actix,

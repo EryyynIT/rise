@@ -1587,6 +1587,27 @@ mod tests {
         )));
     }
 
+    // GraphQL next to the leptos routes: axum passes the schema as a
+    // request Extension (the router state is LeptosOptions), actix as
+    // its own app_data.
+    #[test]
+    fn snapshot_web_axum_fullstack_leptos_graphql() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_featured(
+            Backend::Axum,
+            Frontend::Leptos,
+            vec![Feature::GraphQL],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_fullstack_leptos_graphql() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_featured(
+            Backend::Actix,
+            Frontend::Leptos,
+            vec![Feature::GraphQL],
+        )));
+    }
+
     // The api test module switches routes under a WASM frontend.
     #[test]
     fn snapshot_web_axum_fullstack_yew_api_testing() {

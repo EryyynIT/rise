@@ -5,11 +5,20 @@ use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::response::Response;
 
 {% endif -%}
+{%- if 'graph-ql' in backend.features %}
+#[cfg(feature = "ssr")]
+use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema, http::GraphiQLSource};
+#[cfg(feature = "ssr")]
+use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+#[cfg(feature = "ssr")]
+use axum::{Extension, response::Html};
+
+{% endif -%}
 #[cfg(feature = "ssr")]
 #[tokio::main]
 async fn main() {
     use axum::Router;
-{%- if 'web-sockets' in backend.features %}
+{%- if 'web-sockets' in backend.features or 'graph-ql' in backend.features %}
     use axum::routing::get;
 {%- endif %}
 {%- if 'rate-limiting' in backend.features %}
@@ -40,11 +49,23 @@ async fn main() {
 {%- elif backend.database == 'sled' %}
     let db = db::open().expect("failed to open the database");
 {%- endif %}
+{%- if 'graph-ql' in backend.features %}
+    // The database handle is shared with the GraphQL resolvers as context data.
+    let schema = Schema::build(QueryRoot, EmptyMutation, EmptySubscription)
+        .data(db.clone())
+        .finish();
+{%- endif %}
 
     let app = Router::new()
 {%- if 'web-sockets' in backend.features %}
         // WebSocket echo endpoint, next to the leptos routes.
         .route("/ws", get(ws_handler))
+{%- endif %}
+{%- if 'graph-ql' in backend.features %}
+        // GraphQL endpoint and IDE; the schema travels as a request
+        // extension (the router state is already LeptosOptions).
+        .route("/graphql", get(graphiql).post(graphql))
+        .layer(Extension(schema))
 {%- endif %}
         // The database handle is provided through the request context:
         // server functions and SSR handlers read it with `use_context`
@@ -100,6 +121,35 @@ async fn main() {
 pub fn main() {
     // No client-side main: the browser entry point is `hydrate` in lib.rs.
 }
+{%- if 'graph-ql' in backend.features %}
+
+/// The GraphQL schema: one `hello` field to get started.
+#[cfg(feature = "ssr")]
+struct QueryRoot;
+
+#[cfg(feature = "ssr")]
+#[Object]
+impl QueryRoot {
+    async fn hello(&self) -> &str {
+        "Hello from {{ name }}!"
+    }
+}
+
+#[cfg(feature = "ssr")]
+type AppSchema = Schema<QueryRoot, EmptyMutation, EmptySubscription>;
+
+/// Interactive GraphQL IDE on GET /graphql.
+#[cfg(feature = "ssr")]
+async fn graphiql() -> Html<String> {
+    Html(GraphiQLSource::build().endpoint("/graphql").finish())
+}
+
+/// GraphQL endpoint on POST /graphql.
+#[cfg(feature = "ssr")]
+async fn graphql(Extension(schema): Extension<AppSchema>, request: GraphQLRequest) -> GraphQLResponse {
+    schema.execute(request.into_inner()).await.into()
+}
+{%- endif %}
 {%- if 'web-sockets' in backend.features %}
 
 /// WebSocket echo endpoint: sends every text message back.

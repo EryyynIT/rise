@@ -980,6 +980,40 @@ fn leptos_fullstack_renders_rate_limiting() {
 }
 
 #[test]
+fn leptos_fullstack_renders_graphql() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "leptos-app",
+            "--backend",
+            "axum",
+            "--frontend",
+            "leptos",
+            "--db",
+            "sqlx",
+            "--features",
+            "graph-ql",
+            "--deployment",
+            "self-hosted",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let project = tmp.path().join("leptos-app");
+    let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read Cargo.toml");
+    assert!(cargo_toml.contains("async-graphql-axum"));
+    let main_rs = std::fs::read_to_string(project.join("src/main.rs")).expect("read main.rs");
+    // The schema travels as a request extension — the router state is
+    // already LeptosOptions.
+    assert!(main_rs.contains(".layer(Extension(schema))"));
+    assert!(main_rs.contains(".route(\"/graphql\", get(graphiql).post(graphql))"));
+}
+
+#[test]
 fn new_with_template_dir_uses_the_custom_template() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let template_dir = tmp.path().join("custom-template");

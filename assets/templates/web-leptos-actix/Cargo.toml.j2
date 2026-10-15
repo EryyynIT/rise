@@ -15,6 +15,10 @@ actix-ws = { version = "0.3", optional = true }
 {%- if 'rate-limiting' in backend.features %}
 actix-governor = { version = "0.10", optional = true }
 {%- endif %}
+{%- if 'graph-ql' in backend.features %}
+async-graphql = { version = "7", optional = true }
+async-graphql-actix-web = { version = "7", optional = true }
+{%- endif %}
 leptos = { version = "0.8" }
 leptos_meta = { version = "0.8" }
 leptos_actix = { version = "0.8", optional = true }
@@ -43,6 +47,10 @@ ssr = [
     {%- endif %}
     {%- if 'rate-limiting' in backend.features %}
     "dep:actix-governor",
+    {%- endif %}
+    {%- if 'graph-ql' in backend.features %}
+    "dep:async-graphql",
+    "dep:async-graphql-actix-web",
     {%- endif %}
     "dep:leptos_actix",
     "dep:dotenvy",

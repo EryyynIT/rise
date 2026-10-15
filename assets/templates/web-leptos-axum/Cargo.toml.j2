@@ -27,6 +27,10 @@ dotenvy = { version = "0.15", optional = true }
 {%- if 'rate-limiting' in backend.features %}
 tower_governor = { version = "0.8", optional = true }
 {%- endif %}
+{%- if 'graph-ql' in backend.features %}
+async-graphql = { version = "7", optional = true }
+async-graphql-axum = { version = "7", optional = true }
+{%- endif %}
 console_error_panic_hook = { version = "0.1", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 {%- if backend.database == 'sqlx' %}
@@ -48,6 +52,10 @@ ssr = [
     "dep:dotenvy",
     {%- if 'rate-limiting' in backend.features %}
     "dep:tower_governor",
+    {%- endif %}
+    {%- if 'graph-ql' in backend.features %}
+    "dep:async-graphql",
+    "dep:async-graphql-axum",
     {%- endif %}
     {%- if backend.database == 'sqlx' %}
     "dep:sqlx",

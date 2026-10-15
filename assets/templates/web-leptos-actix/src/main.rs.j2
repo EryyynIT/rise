@@ -1,3 +1,12 @@
+{%- if 'graph-ql' in backend.features %}
+#[cfg(feature = "ssr")]
+use actix_web::{get, post, web};
+#[cfg(feature = "ssr")]
+use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema, http::GraphiQLSource};
+#[cfg(feature = "ssr")]
+use async_graphql_actix_web::{GraphQLRequest, GraphQLResponse};
+
+{% endif -%}
 #[cfg(feature = "ssr")]
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -26,6 +35,9 @@ async fn main() -> std::io::Result<()> {
         .burst_size(5)
         .finish()
         .expect("valid rate limiter configuration");
+{%- endif %}
+{%- if 'graph-ql' in backend.features %}
+    let schema = Schema::build(QueryRoot, EmptyMutation, EmptySubscription).finish();
 {%- endif %}
 
 {%- if backend.database == 'sqlx' %}
@@ -60,6 +72,13 @@ async fn main() -> std::io::Result<()> {
             // WebSocket echo endpoint, next to the leptos routes.
             .service(ws)
 {%- endif %}
+{%- if 'graph-ql' in backend.features %}
+            // GraphQL endpoint and IDE; the schema is its own app_data,
+            // independent of the leptos request context.
+            .service(graphiql)
+            .service(graphql)
+            .app_data(actix_web::web::Data::new(schema.clone()))
+{%- endif %}
             .leptos_routes_with_context(routes, move || provide_context(db.clone()), {
                 let leptos_options = leptos_options.clone();
                 move || {
@@ -91,6 +110,39 @@ async fn main() -> std::io::Result<()> {
 pub fn main() {
     // No client-side main: the browser entry point is `hydrate` in lib.rs.
 }
+{%- if 'graph-ql' in backend.features %}
+
+/// The GraphQL schema: one `hello` field to get started.
+#[cfg(feature = "ssr")]
+struct QueryRoot;
+
+#[cfg(feature = "ssr")]
+#[Object]
+impl QueryRoot {
+    async fn hello(&self) -> &str {
+        "Hello from {{ name }}!"
+    }
+}
+
+#[cfg(feature = "ssr")]
+type AppSchema = Schema<QueryRoot, EmptyMutation, EmptySubscription>;
+
+/// Interactive GraphQL IDE on GET /graphql.
+#[cfg(feature = "ssr")]
+#[get("/graphql")]
+async fn graphiql() -> impl actix_web::Responder {
+    actix_web::HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(GraphiQLSource::build().endpoint("/graphql").finish())
+}
+
+/// GraphQL endpoint on POST /graphql.
+#[cfg(feature = "ssr")]
+#[post("/graphql")]
+async fn graphql(schema: web::Data<AppSchema>, request: GraphQLRequest) -> GraphQLResponse {
+    schema.execute(request.into_inner()).await.into()
+}
+{%- endif %}
 {%- if 'web-sockets' in backend.features %}
 
 /// WebSocket echo endpoint: sends every text message back.

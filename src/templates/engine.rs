@@ -1291,6 +1291,22 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_frontend_leptos_docker() {
+        insta::assert_snapshot!(snapshot_output(&frontend_spec(
+            Frontend::Leptos,
+            Deployment::Docker
+        )));
+    }
+
+    #[test]
+    fn snapshot_frontend_leptos_self_hosted() {
+        insta::assert_snapshot!(snapshot_output(&frontend_spec(
+            Frontend::Leptos,
+            Deployment::SelfHosted
+        )));
+    }
+
+    #[test]
     fn snapshot_library() {
         insta::assert_snapshot!(snapshot_output(&ProjectSpec::Library));
     }

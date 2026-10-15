@@ -1,0 +1,69 @@
+---
+source: src/templates/engine.rs
+expression: "snapshot_output(&frontend_spec(Frontend::Leptos, Deployment::Docker))"
+---
+=== .dockerignore ===
+# Keep the build context small.
+.git
+/target
+/dist
+
+=== .gitignore ===
+/target
+/dist
+
+=== Cargo.toml ===
+[package]
+name = "sample-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+leptos = { version = "0.8", features = ["csr"] }
+console_error_panic_hook = "0.1"
+
+=== Dockerfile ===
+# Build the WASM bundle with trunk.
+FROM rust:1-slim AS builder
+RUN cargo install --locked trunk && rustup target add wasm32-unknown-unknown
+WORKDIR /app
+COPY . .
+RUN trunk build --release
+
+# Serve the static bundle.
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+EXPOSE 80
+
+=== index.html ===
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>sample-app</title>
+</head>
+<body>
+    <link data-trunk rel="rust" href="Cargo.toml">
+</body>
+</html>
+
+=== src/main.rs ===
+use leptos::prelude::*;
+
+/// Root component.
+#[component]
+fn App() -> impl IntoView {
+    let count = RwSignal::new(0);
+    let on_click = move |_| *count.write() += 1;
+
+    view! {
+        <h1>"Hello from sample-app!"</h1>
+        <button on:click=on_click>"Click Me: " {count}</button>
+    }
+}
+
+fn main() {
+    console_error_panic_hook::set_once();
+    leptos::mount::mount_to_body(App);
+}

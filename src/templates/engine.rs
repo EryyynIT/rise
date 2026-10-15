@@ -419,7 +419,7 @@ mod tests {
     ) -> ProjectSpec {
         ProjectSpec::WebApp(WebAppSpec::Backend(BackendSpec {
             backend,
-            database: Some(database),
+            database,
             deployment,
             testing,
             features,
@@ -427,16 +427,11 @@ mod tests {
     }
 
     fn fullstack_spec(backend: Backend, frontend: Frontend) -> ProjectSpec {
-        let database = match frontend {
-            // Leptos fullstack specs carry no database (see wizard).
-            Frontend::Leptos => None,
-            _ => Some(Database::SQLx),
-        };
         ProjectSpec::WebApp(WebAppSpec::Fullstack(FullstackSpec {
             frontend,
             backend: BackendSpec {
                 backend,
-                database,
+                database: Database::SQLx,
                 deployment: Deployment::Docker,
                 testing: vec![],
                 features: vec![],
@@ -456,7 +451,7 @@ mod tests {
             frontend,
             backend: BackendSpec {
                 backend,
-                database: Some(Database::SQLx),
+                database: Database::SQLx,
                 deployment: Deployment::Docker,
                 testing: vec![Testing::Api],
                 features: vec![],
@@ -815,7 +810,7 @@ mod tests {
     fn diesel_wires_a_connection_pool() {
         let spec = ProjectSpec::WebApp(WebAppSpec::Backend(BackendSpec {
             backend: Backend::Axum,
-            database: Some(Database::Diesel),
+            database: Database::Diesel,
             deployment: Deployment::Docker,
             testing: vec![],
             features: vec![],
@@ -842,7 +837,7 @@ mod tests {
     fn sled_opens_an_embedded_store() {
         let spec = ProjectSpec::WebApp(WebAppSpec::Backend(BackendSpec {
             backend: Backend::Axum,
-            database: Some(Database::Sled),
+            database: Database::Sled,
             deployment: Deployment::SelfHosted,
             testing: vec![],
             features: vec![],

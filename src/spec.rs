@@ -51,9 +51,7 @@ pub enum WebAppSpec {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct BackendSpec {
     pub backend: Backend,
-    /// `None` for a Leptos fullstack app: server functions have no
-    /// database wiring yet, so the wizard neither asks nor accepts one.
-    pub database: Option<Database>,
+    pub database: Database,
     pub deployment: Deployment,
     pub testing: Vec<Testing>,
     pub features: Vec<Feature>,

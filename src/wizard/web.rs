@@ -119,15 +119,12 @@ fn prompt_full() -> Result<WebAppSpec> {
 /// Ask all backend questions, shared by backend-only and fullstack apps.
 ///
 /// A Leptos fullstack app talks to its backend through server functions;
-/// the database/testing/features wiring of the REST templates does not
-/// apply to it yet, so those questions are skipped (deployment stays —
-/// it drives the Dockerfile).
+/// the testing/features wiring of the REST templates does not apply to it,
+/// so those questions are skipped. The database stays — server functions
+/// use it — and deployment drives the Dockerfile.
 fn prompt_backend(backend: Backend, frontend: Option<Frontend>) -> Result<BackendSpec> {
     let leptos = frontend == Some(Frontend::Leptos);
-    let database = match leptos {
-        true => None,
-        false => Some(select("Select a database", Database::iter().collect())?),
-    };
+    let database = select("Select a database", Database::iter().collect())?;
     let deployment = select("Select a deployment option", Deployment::iter().collect())?;
     let (testing, features) = match leptos {
         true => (Vec::new(), Vec::new()),
@@ -149,9 +146,9 @@ fn prompt_backend(backend: Backend, frontend: Option<Frontend>) -> Result<Backen
 
 /// Complete the backend spec, asking only for what the flags left open.
 ///
-/// For a Leptos frontend the database/testing/features questions are
-/// skipped like in [`prompt_backend`]; flag validation has already
-/// rejected those flags, so the draft fields are guaranteed to be unset.
+/// For a Leptos frontend the testing/features questions are skipped like
+/// in [`prompt_backend`]; flag validation has already rejected those
+/// flags, so the draft fields are guaranteed to be unset.
 fn complete_backend(
     backend: Backend,
     draft: BackendDraft,
@@ -159,12 +156,9 @@ fn complete_backend(
     mode: Interaction,
 ) -> Result<BackendSpec> {
     let leptos = frontend == Some(Frontend::Leptos);
-    let database = match leptos {
-        true => None,
-        false => Some(fill(draft.database, mode, "`--db`", || {
-            select("Select a database", Database::iter().collect())
-        })?),
-    };
+    let database = fill(draft.database, mode, "`--db`", || {
+        select("Select a database", Database::iter().collect())
+    })?;
     let deployment = fill(draft.deployment, mode, "`--deployment`", || {
         select("Select a deployment option", Deployment::iter().collect())
     })?;

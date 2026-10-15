@@ -92,15 +92,13 @@ fn validate_flags(args: &NewArgs) -> Result<()> {
         }
     }
 
-    // A Leptos fullstack app gets no database/testing/features wiring yet:
-    // it talks to the backend through server functions, not the REST stack
-    // those options configure. Reject the flags instead of ignoring them.
-    if web.frontend == Some(Frontend::Leptos)
-        && (web.database.is_some() || web.testing.is_some() || web.features.is_some())
-    {
+    // A Leptos app talks to its backend through server functions, not the
+    // REST stack the testing/features options configure. Reject those
+    // flags instead of ignoring them. `--db` is fine: server functions
+    // use the connection.
+    if web.frontend == Some(Frontend::Leptos) && (web.testing.is_some() || web.features.is_some()) {
         return Err(Error::ConflictingOptions(
-            "`--db`, `--testing` and `--features` are not supported with a leptos frontend yet"
-                .into(),
+            "`--testing` and `--features` are not supported with a leptos frontend yet".into(),
         ));
     }
 
@@ -183,7 +181,7 @@ pub(crate) fn multi_select<T: Display>(message: &str, options: Vec<T>) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::spec::{Backend, Database, Deployment, Frontend};
+    use crate::spec::{Backend, Database, Deployment, Feature, Frontend};
 
     #[test]
     fn web_flags_conflict_with_non_web_kind() {
@@ -262,13 +260,40 @@ mod tests {
     }
 
     #[test]
-    fn leptos_rejects_backend_stack_flags() {
+    fn leptos_rejects_testing_and_features_but_accepts_a_database() {
+        let leptos_flags = || WebFlags {
+            backend: Some(Backend::Axum),
+            frontend: Some(Frontend::Leptos),
+            ..WebFlags::default()
+        };
         let args = NewArgs {
             web: WebFlags {
-                backend: Some(Backend::Axum),
-                frontend: Some(Frontend::Leptos),
                 database: Some(Database::SQLx),
-                ..WebFlags::default()
+                ..leptos_flags()
+            },
+            ..NewArgs::default()
+        };
+        assert!(
+            validate_flags(&args).is_ok(),
+            "server functions can use a database"
+        );
+
+        let args = NewArgs {
+            web: WebFlags {
+                testing: Some(vec![Testing::Api]),
+                ..leptos_flags()
+            },
+            ..NewArgs::default()
+        };
+        assert!(matches!(
+            validate_flags(&args),
+            Err(Error::ConflictingOptions(_))
+        ));
+
+        let args = NewArgs {
+            web: WebFlags {
+                features: Some(vec![Feature::WebSockets]),
+                ..leptos_flags()
             },
             ..NewArgs::default()
         };

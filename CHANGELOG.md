@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   macroquad game — a window, a game loop with delta-time movement
   (arrows/WASD), coins spawning on a timer to collect for score. The
   wizard's kind prompt offers the game kind too.
+- `--kind embedded`: a new `embedded-cortex-m` template generates
+  bare-metal ARM Cortex-M firmware — a cortex-m-rt entry point, defmt
+  logging over RTT (defmt-rtt + panic-probe), a probe-rs runner and a
+  `memory.x` placeholder (STM32F401CC) with the target pinned to
+  `thumbv7em-none-eabihf` in `.cargo/config.toml`; `cargo run` flashes
+  the board. The wizard's kind prompt offers the embedded kind, and the
+  next steps spell out the one-time setup. Verified to build (debug +
+  release) for the pinned target; flashing needs real hardware.
 - Testing and features for Leptos fullstack apps: `--testing` and
   `--features` are no longer rejected with `--frontend leptos`, and the
   wizard asks those questions for leptos too. `api` generates an
@@ -33,7 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The wizard now offers only stacks that have templates: `axum`/`actix`
-  backends, the `web`/`cli`/`library`/`game` kinds, `yew`/`leptos` for
+  backends, the `web`/`cli`/`library`/`embedded`/`game` kinds,
+  `yew`/`leptos` for
   frontend-only apps plus the four template engines with a backend.
   Previously most offered choices (five of seven backends, the embedded
   and game kinds, seven of nine frontend-only options) walked the user

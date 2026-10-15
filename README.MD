@@ -66,9 +66,12 @@ where the backend serves the API and the built frontend bundle) or a Leptos
 frontend (a single crate built with cargo-leptos — server-side rendering plus
 hydration, database wired into server functions, the same testing and feature
 options as the REST backends), frontend-only Yew and Leptos
-SPAs built with trunk, plus `--kind cli`, `--kind library` and `--kind game`
-(a playable macroquad window — move with arrows/WASD, collect coins).
-Other combinations the flags accept (`rocket`, `seed`, `embedded`, ...)
+SPAs built with trunk, plus `--kind cli`, `--kind library`, `--kind game`
+(a playable macroquad window — move with arrows/WASD, collect coins) and
+`--kind embedded` (bare-metal ARM Cortex-M firmware: cortex-m-rt + defmt
+logging, flashed with probe-rs — adjust `.cargo/config.toml` and `memory.x`
+to your MCU).
+Other combinations the flags accept (`rocket`, `seed`, ...)
 end with a typed "not available yet" error — that's the roadmap, not a broken
 promise.
 
@@ -106,7 +109,7 @@ Selection for:
 -[x] WebApps
 -[x] CLI
 -[x] Gamedev
--[] Embedded
+-[x] Embedded
 -[x] Libraries
 - More, you're free to give more ideas!
 
@@ -114,7 +117,7 @@ Generation for:
 -[/] WebApps (backend-only Axum and Actix Web — database wiring, tests, WebSockets, gRPC, GraphQL and rate limiting generated from your choices — fullstack with Askama, Tera, Minijinja or Handlebars, Leptos SSR + hydration apps built with cargo-leptos (database wired into server functions, same tests and features), and Yew or Leptos WASM frontends: standalone trunk SPAs or — Yew — a fullstack workspace)
 -[x] CLI
 -[x] Gamedev
--[] Embedded
+-[x] Embedded
 -[x] Libraries
 - More (if you wish to add something)
 

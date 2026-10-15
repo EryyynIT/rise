@@ -43,6 +43,11 @@ pub enum Error {
     #[error("features not available yet: {0}")]
     FeaturesNotAvailable(String),
 
+    /// One or more selected testing options have no template content for
+    /// the chosen stack.
+    #[error("testing options not available for this stack: {0}")]
+    TestingNotAvailable(String),
+
     /// A template directory on disk (`--template`) could not be read.
     #[error("cannot read template directory `{path}`: {source}")]
     TemplateDirUnreadable {

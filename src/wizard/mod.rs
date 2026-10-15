@@ -15,7 +15,7 @@ use strum::IntoEnumIterator;
 use crate::cli::{NewArgs, WebFlags};
 use crate::error::{Error, Result};
 use crate::name::ProjectName;
-use crate::spec::{Database, Frontend, ProjectKind, ProjectSpec, Testing};
+use crate::spec::{Database, ProjectKind, ProjectSpec, Testing};
 use crate::wizard::render::render_cfg;
 
 /// Whether the wizard may ask questions.
@@ -90,16 +90,6 @@ fn validate_flags(args: &NewArgs) -> Result<()> {
             }
             _ => {}
         }
-    }
-
-    // A Leptos app talks to its backend through server functions, not the
-    // REST stack the testing/features options configure. Reject those
-    // flags instead of ignoring them. `--db` is fine: server functions
-    // use the connection.
-    if web.frontend == Some(Frontend::Leptos) && (web.testing.is_some() || web.features.is_some()) {
-        return Err(Error::ConflictingOptions(
-            "`--testing` and `--features` are not supported with a leptos frontend yet".into(),
-        ));
     }
 
     // sqlx-based tests need the sqlx database stack they exercise.
@@ -260,47 +250,22 @@ mod tests {
     }
 
     #[test]
-    fn leptos_rejects_testing_and_features_but_accepts_a_database() {
-        let leptos_flags = || WebFlags {
-            backend: Some(Backend::Axum),
-            frontend: Some(Frontend::Leptos),
-            ..WebFlags::default()
-        };
+    fn leptos_accepts_testing_features_and_a_database() {
+        // The leptos templates wire databases into server functions and
+        // render the same testing/features content as the REST templates;
+        // only `mock` testing is rejected, later, by `validate_testing`.
         let args = NewArgs {
             web: WebFlags {
+                backend: Some(Backend::Axum),
+                frontend: Some(Frontend::Leptos),
                 database: Some(Database::SQLx),
-                ..leptos_flags()
-            },
-            ..NewArgs::default()
-        };
-        assert!(
-            validate_flags(&args).is_ok(),
-            "server functions can use a database"
-        );
-
-        let args = NewArgs {
-            web: WebFlags {
-                testing: Some(vec![Testing::Api]),
-                ..leptos_flags()
-            },
-            ..NewArgs::default()
-        };
-        assert!(matches!(
-            validate_flags(&args),
-            Err(Error::ConflictingOptions(_))
-        ));
-
-        let args = NewArgs {
-            web: WebFlags {
+                testing: Some(vec![Testing::Api, Testing::SQLx]),
                 features: Some(vec![Feature::WebSockets]),
-                ..leptos_flags()
+                ..WebFlags::default()
             },
             ..NewArgs::default()
         };
-        assert!(matches!(
-            validate_flags(&args),
-            Err(Error::ConflictingOptions(_))
-        ));
+        assert!(validate_flags(&args).is_ok());
     }
 
     #[test]

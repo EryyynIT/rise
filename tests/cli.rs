@@ -825,7 +825,9 @@ fn leptos_fullstack_wires_the_database() {
 }
 
 #[test]
-fn leptos_rejects_backend_stack_options() {
+fn leptos_rejects_mock_testing() {
+    // A Leptos app has no REST layer to mock; every other testing option
+    // and every feature is accepted.
     Command::cargo_bin("rise")
         .expect("binary")
         .args([
@@ -835,8 +837,10 @@ fn leptos_rejects_backend_stack_options() {
             "axum",
             "--frontend",
             "leptos",
+            "--db",
+            "sqlx",
             "--testing",
-            "api",
+            "mock",
             "--deployment",
             "docker",
             "--no-input",
@@ -844,8 +848,32 @@ fn leptos_rejects_backend_stack_options() {
         .assert()
         .failure()
         .stderr(predicate::str::contains(
-            "not supported with a leptos frontend",
+            "testing options not available for this stack: mock",
         ));
+
+    let tmp = tempfile::tempdir().expect("tempdir");
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "leptos-app",
+            "--backend",
+            "axum",
+            "--frontend",
+            "leptos",
+            "--db",
+            "sqlx",
+            "--testing",
+            "api",
+            "--features",
+            "web-sockets",
+            "--deployment",
+            "docker",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
 }
 
 #[test]

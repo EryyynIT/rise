@@ -118,23 +118,17 @@ fn prompt_full() -> Result<WebAppSpec> {
 
 /// Ask all backend questions, shared by backend-only and fullstack apps.
 ///
-/// A Leptos fullstack app talks to its backend through server functions;
-/// the testing/features wiring of the REST templates does not apply to it,
-/// so those questions are skipped. The database stays — server functions
-/// use it — and deployment drives the Dockerfile.
+/// The database question is asked for a Leptos frontend too — server
+/// functions use the connection. Only the testing options shrink: a
+/// Leptos app has no REST layer to mock.
 fn prompt_backend(backend: Backend, frontend: Option<Frontend>) -> Result<BackendSpec> {
-    let leptos = frontend == Some(Frontend::Leptos);
     let database = select("Select a database", Database::iter().collect())?;
     let deployment = select("Select a deployment option", Deployment::iter().collect())?;
-    let (testing, features) = match leptos {
-        true => (Vec::new(), Vec::new()),
-        false => {
-            let testing = multi_select("Select testing options", Testing::iter().collect())?;
-            let features = multi_select("Select features", implemented_features())?;
-            validate_features(&features, &implemented_features())?;
-            (testing, features)
-        }
-    };
+    let implemented_testing = implemented_testing(frontend);
+    let testing = multi_select("Select testing options", implemented_testing.clone())?;
+    validate_testing(&testing, &implemented_testing)?;
+    let features = multi_select("Select features", implemented_features())?;
+    validate_features(&features, &implemented_features())?;
     Ok(BackendSpec {
         backend,
         database,
@@ -146,35 +140,29 @@ fn prompt_backend(backend: Backend, frontend: Option<Frontend>) -> Result<Backen
 
 /// Complete the backend spec, asking only for what the flags left open.
 ///
-/// For a Leptos frontend the testing/features questions are skipped like
-/// in [`prompt_backend`]; flag validation has already rejected those
-/// flags, so the draft fields are guaranteed to be unset.
+/// The testing options depend on the frontend like in [`prompt_backend`];
+/// flag-passed values outside the implemented list are rejected by name.
 fn complete_backend(
     backend: Backend,
     draft: BackendDraft,
     frontend: Option<Frontend>,
     mode: Interaction,
 ) -> Result<BackendSpec> {
-    let leptos = frontend == Some(Frontend::Leptos);
     let database = fill(draft.database, mode, "`--db`", || {
         select("Select a database", Database::iter().collect())
     })?;
     let deployment = fill(draft.deployment, mode, "`--deployment`", || {
         select("Select a deployment option", Deployment::iter().collect())
     })?;
-    let (testing, features) = match leptos {
-        true => (Vec::new(), Vec::new()),
-        false => {
-            let testing = fill_multi(draft.testing, mode, || {
-                multi_select("Select testing options", Testing::iter().collect())
-            })?;
-            let features = fill_multi(draft.features, mode, || {
-                multi_select("Select features", implemented_features())
-            })?;
-            validate_features(&features, &implemented_features())?;
-            (testing, features)
-        }
-    };
+    let implemented_testing = implemented_testing(frontend);
+    let testing = fill_multi(draft.testing, mode, || {
+        multi_select("Select testing options", implemented_testing.clone())
+    })?;
+    validate_testing(&testing, &implemented_testing)?;
+    let features = fill_multi(draft.features, mode, || {
+        multi_select("Select features", implemented_features())
+    })?;
+    validate_features(&features, &implemented_features())?;
     Ok(BackendSpec {
         backend,
         database,
@@ -182,6 +170,39 @@ fn complete_backend(
         testing,
         features,
     })
+}
+
+/// The testing options the templates render for the given frontend. A
+/// Leptos app talks to its backend through server functions over concrete
+/// database handles — there is no trait seam to mock, so `mock` is not
+/// offered (and flag-passed values are rejected by [`validate_testing`]).
+fn implemented_testing(frontend: Option<Frontend>) -> Vec<Testing> {
+    match frontend {
+        Some(Frontend::Leptos) => vec![Testing::Api, Testing::SQLx],
+        _ => Testing::iter().collect(),
+    }
+}
+
+/// Reject testing options with no template content for the chosen stack,
+/// naming them by their CLI spellings. The implemented list is a
+/// parameter so the rejection path stays testable.
+fn validate_testing(testing: &[Testing], implemented: &[Testing]) -> Result<()> {
+    use clap::ValueEnum;
+    let unimplemented = testing
+        .iter()
+        .filter(|option| !implemented.contains(option))
+        .map(|option| {
+            option
+                .to_possible_value()
+                .expect("testing values are never hidden")
+                .get_name()
+                .to_owned()
+        })
+        .collect::<Vec<_>>();
+    if unimplemented.is_empty() {
+        return Ok(());
+    }
+    Err(Error::TestingNotAvailable(unimplemented.join(", ")))
 }
 
 /// The features the templates actually render — currently every
@@ -327,6 +348,37 @@ mod tests {
             panic!("expected FeaturesNotAvailable");
         };
         assert_eq!(names, "grpc");
+    }
+
+    #[test]
+    fn leptos_testing_options_exclude_mock() {
+        let options = implemented_testing(Some(Frontend::Leptos));
+        assert!(options.contains(&Testing::Api));
+        assert!(options.contains(&Testing::SQLx));
+        assert!(!options.contains(&Testing::Mock));
+        // Every other frontend shape offers all testing options.
+        let all = Testing::iter().collect::<Vec<_>>();
+        assert_eq!(implemented_testing(None), all);
+        assert_eq!(implemented_testing(Some(Frontend::Yew)), all);
+    }
+
+    #[test]
+    fn unimplemented_testing_options_are_rejected_by_name() {
+        let err = validate_testing(&[Testing::Mock], &[Testing::Api, Testing::SQLx])
+            .expect_err("mock is not in the given implemented list");
+        let Error::TestingNotAvailable(names) = err else {
+            panic!("expected TestingNotAvailable");
+        };
+        assert_eq!(names, "mock");
+    }
+
+    #[test]
+    fn implemented_testing_passes_validation() {
+        for frontend in [None, Some(Frontend::Leptos)] {
+            let implemented = implemented_testing(frontend);
+            validate_testing(&implemented.clone(), &implemented)
+                .expect("the implemented list passes its own validation");
+        }
     }
 
     #[test]

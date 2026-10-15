@@ -315,7 +315,7 @@ fn new_with_grpc_generates_a_tonic_service() {
     let proto = std::fs::read_to_string(project.join("proto/hello.proto")).expect("read proto");
     assert!(proto.contains("service Greeter"));
     let build_rs = std::fs::read_to_string(project.join("build.rs")).expect("read build.rs");
-    assert!(build_rs.contains("tonic_build::compile_protos"));
+    assert!(build_rs.contains("tonic_prost_build::compile_protos"));
     let grpc_rs = std::fs::read_to_string(project.join("src/grpc.rs")).expect("read grpc.rs");
     assert!(grpc_rs.contains("GreeterImpl"));
     let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read Cargo.toml");

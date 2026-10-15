@@ -226,7 +226,7 @@ async fn main() -> std::io::Result<()> {
     println!("listening on http://localhost:3000");
 {%- if 'grpc' in backend.features %}
     // The gRPC API runs on its own port, next to the HTTP server.
-    tokio::spawn(async {
+    actix_web::rt::spawn(async {
         if let Err(err) = grpc::serve().await {
             eprintln!("gRPC server error: {err}");
         }

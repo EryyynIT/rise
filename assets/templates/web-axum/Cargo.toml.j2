@@ -21,6 +21,7 @@ async-graphql-axum = "7"
 {%- endif %}
 {%- if 'grpc' in backend.features %}
 tonic = "0.14"
+tonic-prost = "0.14"
 prost = "0.14"
 {%- endif %}
 {%- if frontend == 'yew' %}
@@ -48,7 +49,7 @@ sled = "0.34"
 {%- if 'grpc' in backend.features %}
 
 [build-dependencies]
-tonic-build = "0.14"
+tonic-prost-build = "0.14"
 {%- endif %}
 {%- if 'api' in backend.testing or 'mock' in backend.testing %}
 

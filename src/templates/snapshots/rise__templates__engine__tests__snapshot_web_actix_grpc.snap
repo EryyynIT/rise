@@ -26,11 +26,12 @@ actix-web = "4"
 # Loads .env (DATABASE_URL & co.) into the environment at startup.
 dotenvy = "0.15"
 tonic = "0.14"
+tonic-prost = "0.14"
 prost = "0.14"
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }
 
 [build-dependencies]
-tonic-build = "0.14"
+tonic-prost-build = "0.14"
 
 === Dockerfile ===
 FROM rust:1-slim AS builder
@@ -50,7 +51,7 @@ CMD ["app"]
 fn main() {
     // Requires protoc (the Protocol Buffers compiler) on the system:
     // https://grpc.io/docs/protoc-installation/
-    tonic_build::compile_protos("proto/hello.proto")
+    tonic_prost_build::compile_protos("proto/hello.proto")
         .expect("failed to compile proto/hello.proto — is protoc installed?");
 }
 
@@ -142,7 +143,7 @@ async fn main() -> std::io::Result<()> {
     let pool = db::create_pool().await.expect("failed to connect to database");
     println!("listening on http://localhost:3000");
     // The gRPC API runs on its own port, next to the HTTP server.
-    tokio::spawn(async {
+    actix_web::rt::spawn(async {
         if let Err(err) = grpc::serve().await {
             eprintln!("gRPC server error: {err}");
         }

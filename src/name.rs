@@ -75,6 +75,11 @@ fn validate(name: &str) -> std::result::Result<(), &'static str> {
     if KEYWORDS.contains(&name) {
         return Err("the name is a reserved Rust keyword");
     }
+    // Windows reserves these device names in every directory: creating
+    // `con/` fails there with an obscure OS error long after validation.
+    if WINDOWS_DEVICE_NAMES.contains(&name.to_ascii_lowercase().as_str()) {
+        return Err("the name is a reserved device name on Windows");
+    }
     Ok(())
 }
 
@@ -86,6 +91,13 @@ const KEYWORDS: &[&str] = &[
     "impl", "in", "let", "loop", "macro", "match", "mod", "move", "mut", "override", "priv", "pub",
     "ref", "return", "self", "static", "struct", "super", "trait", "true", "try", "type", "typeof",
     "unsafe", "unsized", "use", "virtual", "where", "while", "yield",
+];
+
+/// Windows device names (compared lowercase — the reservation is
+/// case-insensitive).
+const WINDOWS_DEVICE_NAMES: &[&str] = &[
+    "aux", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9", "con", "lpt1",
+    "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9", "nul", "prn",
 ];
 
 #[cfg(test)]
@@ -123,6 +135,22 @@ mod tests {
         }
         // Keyword-flavoured but valid names still pass.
         for name in ["loops", "Loop", "my-loop", "generator"] {
+            assert!(ProjectName::new(name.to_owned()).is_ok(), "{name}");
+        }
+    }
+
+    #[test]
+    fn rejects_windows_device_names() {
+        // Case-insensitive: Windows reserves CON as much as con.
+        for name in ["con", "CON", "aux", "nul", "prn", "com1", "Lpt9"] {
+            let Err(Error::InvalidProjectName { reason, .. }) = ProjectName::new(name.to_owned())
+            else {
+                panic!("{name} must be rejected");
+            };
+            assert_eq!(reason, "the name is a reserved device name on Windows");
+        }
+        // Lookalikes stay valid.
+        for name in ["console", "con-app", "com10", "null"] {
             assert!(ProjectName::new(name.to_owned()).is_ok(), "{name}");
         }
     }

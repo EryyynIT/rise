@@ -1,11 +1,18 @@
 # Build the SSR binary and the WASM bundle with cargo-leptos.
 FROM rust:1-slim AS builder
+{%- if backend.database == 'diesel' %}
+# Diesel links against libpq.
+RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev && rm -rf /var/lib/apt/lists/*
+{%- endif %}
 RUN cargo install --locked cargo-leptos && rustup target add wasm32-unknown-unknown
 WORKDIR /app
 COPY . .
 RUN cargo leptos build --release
 
 FROM debian:bookworm-slim
+{%- if backend.database == 'diesel' %}
+RUN apt-get update && apt-get install -y --no-install-recommends libpq5 && rm -rf /var/lib/apt/lists/*
+{%- endif %}
 WORKDIR /app
 COPY --from=builder /app/target/release/{{ crate_name }} /usr/local/bin/server
 COPY --from=builder /app/target/site /app/site

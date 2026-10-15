@@ -710,8 +710,8 @@ fn new_generates_leptos_axum_fullstack_without_prompts() {
     assert!(project.join("style/main.css").exists());
     let dockerfile = std::fs::read_to_string(project.join("Dockerfile")).expect("read");
     assert!(dockerfile.contains("cargo-leptos"));
-    assert!(!project.join(".env.example").exists());
-    assert!(!project.join("src/db.rs").exists());
+    assert!(project.join(".env.example").exists());
+    assert!(project.join("src/db.rs").exists());
 }
 
 #[test]

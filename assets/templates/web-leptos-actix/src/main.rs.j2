@@ -8,22 +8,40 @@ async fn main() -> std::io::Result<()> {
     use leptos_actix::{LeptosRoutes, generate_route_list};
     use leptos_meta::MetaTags;
     use {{ crate_ident }}::app::*;
+    use {{ crate_ident }}::db;
+
+    // Loads .env when present (DATABASE_URL & co.); absent is fine.
+    let _ = dotenvy::dotenv();
 
     let conf = get_configuration(None).expect("failed to load leptos configuration");
     let addr = conf.leptos_options.site_addr;
+
+{%- if backend.database == 'sqlx' %}
+    let db = db::create_pool().await.expect("failed to connect to database");
+{%- elif backend.database == 'sea-orm' %}
+    let db = db::connect().await.expect("failed to connect to database");
+{%- elif backend.database == 'diesel' %}
+    let db = db::create_pool();
+{%- elif backend.database == 'sled' %}
+    let db = db::open().expect("failed to open the database");
+{%- endif %}
 
     HttpServer::new(move || {
         // Generate the list of routes in your Leptos app.
         let routes = generate_route_list(App);
         let leptos_options = &conf.leptos_options;
         let site_root = leptos_options.site_root.to_string();
+        // The database handle is provided through the request context:
+        // server functions and SSR handlers read it with `use_context`
+        // (see `database_status` in app.rs).
+        let db = db.clone();
 
         println!("listening on http://{}", &addr);
 
         App::new()
             // Serve the compiled JS/WASM/CSS bundle.
             .service(Files::new("/pkg", format!("{site_root}/pkg")))
-            .leptos_routes(routes, {
+            .leptos_routes_with_context(routes, move || provide_context(db.clone()), {
                 let leptos_options = leptos_options.clone();
                 move || {
                     view! {

@@ -871,9 +871,9 @@ mod tests {
         assert!(cargo_toml.contains("name = \"my-app\""));
         let app_rs = fs::read_to_string(tmp.path().join("src/app.rs")).expect("read");
         assert!(app_rs.contains("/pkg/my-app.css"));
-        // No database wiring for leptos yet.
-        assert!(!tmp.path().join("src/db.rs").exists());
-        assert!(!tmp.path().join(".env.example").exists());
+        // Database wiring ships with the leptos templates.
+        assert!(tmp.path().join("src/db.rs").exists());
+        assert!(tmp.path().join(".env.example").exists());
     }
 
     #[test]

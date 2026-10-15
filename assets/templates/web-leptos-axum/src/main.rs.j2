@@ -6,6 +6,10 @@ async fn main() {
     use leptos::prelude::*;
     use leptos_axum::{LeptosRoutes, generate_route_list};
     use {{ crate_ident }}::app::*;
+    use {{ crate_ident }}::db;
+
+    // Loads .env when present (DATABASE_URL & co.); absent is fine.
+    let _ = dotenvy::dotenv();
 
     let conf = get_configuration(None).expect("failed to load leptos configuration");
     let addr = conf.leptos_options.site_addr;
@@ -13,11 +17,29 @@ async fn main() {
     // Generate the list of routes in your Leptos app.
     let routes = generate_route_list(App);
 
+{%- if backend.database == 'sqlx' %}
+    let db = db::create_pool().await.expect("failed to connect to database");
+{%- elif backend.database == 'sea-orm' %}
+    let db = db::connect().await.expect("failed to connect to database");
+{%- elif backend.database == 'diesel' %}
+    let db = db::create_pool();
+{%- elif backend.database == 'sled' %}
+    let db = db::open().expect("failed to open the database");
+{%- endif %}
+
     let app = Router::new()
-        .leptos_routes(&leptos_options, routes, {
-            let leptos_options = leptos_options.clone();
-            move || shell(leptos_options.clone())
-        })
+        // The database handle is provided through the request context:
+        // server functions and SSR handlers read it with `use_context`
+        // (see `database_status` in app.rs).
+        .leptos_routes_with_context(
+            &leptos_options,
+            routes,
+            move || provide_context(db.clone()),
+            {
+                let leptos_options = leptos_options.clone();
+                move || shell(leptos_options.clone())
+            },
+        )
         .fallback(leptos_axum::file_and_error_handler(shell))
         .with_state(leptos_options);
 

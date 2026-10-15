@@ -15,6 +15,17 @@ leptos_actix = { version = "0.8", optional = true }
 leptos_router = { version = "0.8" }
 console_error_panic_hook = { version = "0.1", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
+# Loads .env (DATABASE_URL & co.) into the environment at startup.
+dotenvy = { version = "0.15", optional = true }
+{%- if backend.database == 'sqlx' %}
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"], optional = true }
+{%- elif backend.database == 'diesel' %}
+diesel = { version = "2", features = ["postgres", "r2d2"], optional = true }
+{%- elif backend.database == 'sea-orm' %}
+sea-orm = { version = "1", features = ["sqlx-postgres", "runtime-tokio-rustls"], optional = true }
+{%- elif backend.database == 'sled' %}
+sled = { version = "0.34", optional = true }
+{%- endif %}
 
 [features]
 hydrate = ["leptos/hydrate", "dep:console_error_panic_hook", "dep:wasm-bindgen"]
@@ -22,6 +33,16 @@ ssr = [
     "dep:actix-files",
     "dep:actix-web",
     "dep:leptos_actix",
+    "dep:dotenvy",
+    {%- if backend.database == 'sqlx' %}
+    "dep:sqlx",
+    {%- elif backend.database == 'diesel' %}
+    "dep:diesel",
+    {%- elif backend.database == 'sea-orm' %}
+    "dep:sea-orm",
+    {%- elif backend.database == 'sled' %}
+    "dep:sled",
+    {%- endif %}
     "leptos/ssr",
     "leptos_meta/ssr",
     "leptos_router/ssr",

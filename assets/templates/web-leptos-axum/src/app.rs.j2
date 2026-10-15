@@ -54,9 +54,79 @@ fn HomePage() -> impl IntoView {
     // Creates a reactive value to update the button
     let count = RwSignal::new(0);
     let on_click = move |_| *count.write() += 1;
+    // Runs on the server during SSR and streams the result to the client.
+    let status = OnceResource::new(database_status());
 
     view! {
         <h1>"Welcome to Leptos!"</h1>
         <button on:click=on_click>"Click Me: " {count}</button>
+        <Suspense fallback=|| view! { <p>"Checking the database…"</p> }>
+            {move || {
+                status.get().map(|result| {
+                    view! { <p>"Database: " {result.unwrap_or_else(|e| e.to_string())}</p> }
+                })
+            }}
+        </Suspense>
     }
 }
+
+/// Example server function: proves the database wiring works. The
+/// connection is provided through the request context (created in
+/// `main.rs`, see `src/db.rs` for the type) — replace the query with
+/// your own.
+{%- if backend.database == 'sqlx' %}
+#[server]
+pub async fn database_status() -> Result<String, ServerFnError> {
+    let pool = use_context::<sqlx::PgPool>()
+        .ok_or_else(|| ServerFnError::new("database pool missing from the request context"))?;
+    // Runtime-checked query: the project compiles without a live database.
+    sqlx::query_scalar::<_, String>("SELECT 'connected'::text")
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(format!("database query failed: {e}")))
+}
+{%- elif backend.database == 'sea-orm' %}
+#[server]
+pub async fn database_status() -> Result<String, ServerFnError> {
+    let db = use_context::<sea_orm::DatabaseConnection>()
+        .ok_or_else(|| ServerFnError::new("database connection missing from the request context"))?;
+    db.ping()
+        .await
+        .map_err(|e| ServerFnError::new(format!("database ping failed: {e}")))?;
+    Ok("connected".to_owned())
+}
+{%- elif backend.database == 'diesel' %}
+#[server]
+pub async fn database_status() -> Result<String, ServerFnError> {
+    let pool = use_context::<crate::db::DbPool>()
+        .ok_or_else(|| ServerFnError::new("database pool missing from the request context"))?;
+    // Diesel is a blocking ORM: keep it off the async executor.
+    tokio::task::spawn_blocking(move || -> Result<String, ServerFnError> {
+        use diesel::prelude::*;
+        let mut conn = pool
+            .get()
+            .map_err(|e| ServerFnError::new(format!("no database connection: {e}")))?;
+        diesel::sql_query("SELECT 'connected'::text AS status")
+            .execute(&mut conn)
+            .map_err(|e| ServerFnError::new(format!("database query failed: {e}")))?;
+        Ok("connected".to_owned())
+    })
+    .await
+    .map_err(|e| ServerFnError::new(format!("database task failed: {e}")))?
+}
+{%- elif backend.database == 'sled' %}
+#[server]
+pub async fn database_status() -> Result<String, ServerFnError> {
+    let db = use_context::<sled::Db>()
+        .ok_or_else(|| ServerFnError::new("database missing from the request context"))?;
+    // A write+read roundtrip proves the embedded store works.
+    db.insert(b"status", b"connected".as_slice())
+        .map_err(|e| ServerFnError::new(format!("database write failed: {e}")))?;
+    let value = db
+        .get(b"status")
+        .map_err(|e| ServerFnError::new(format!("database read failed: {e}")))?
+        .ok_or_else(|| ServerFnError::new("status key missing after writing it"))?;
+    String::from_utf8(value.to_vec())
+        .map_err(|e| ServerFnError::new(format!("database value is not utf8: {e}")))
+}
+{%- endif %}

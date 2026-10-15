@@ -304,11 +304,11 @@ mod tests {
     /// `cargo test --features ssr` (server code is gated on `ssr`).
     #[actix_web::test]
     async fn server_function_answers() {
-        // The embedded store works in tests; keep it out of the repo dir.
-        let db = sled::open(
-            std::env::temp_dir().join(format!("sample-app-test-{}", std::process::id())),
-        )
-        .expect("open the test database");
+        // A temporary store: sled deletes it when the test ends.
+        let db = sled::Config::new()
+            .temporary(true)
+            .open()
+            .expect("open the test database");
         let conf = get_configuration(None).expect("failed to load leptos configuration");
         let leptos_options = conf.leptos_options;
         let routes = generate_route_list(App);

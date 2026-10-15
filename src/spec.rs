@@ -137,8 +137,9 @@ pub enum Deployment {
     SelfHosted,
 }
 
-/// Testing tools.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize, ValueEnum)]
+/// Testing tools. `Mock` is accepted by the CLI but rejected by the
+/// wizard: no template renders mock content.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, Serialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum Testing {
     Api,

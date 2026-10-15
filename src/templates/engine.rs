@@ -941,7 +941,7 @@ mod tests {
             Backend::Axum,
             Database::SQLx,
             Deployment::Docker,
-            vec![Testing::Api, Testing::Mock],
+            vec![Testing::Api],
             vec![],
         );
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -955,7 +955,6 @@ mod tests {
         let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
         assert!(cargo_toml.contains("[dev-dependencies]"));
         assert!(cargo_toml.contains("tower"));
-        assert!(cargo_toml.contains("mockall"));
     }
 
     #[test]
@@ -1179,7 +1178,7 @@ mod tests {
             Backend::Axum,
             Database::SQLx,
             Deployment::Docker,
-            vec![Testing::Api, Testing::SQLx, Testing::Mock],
+            vec![Testing::Api, Testing::SQLx],
             vec![Feature::WebSockets],
         )));
     }
@@ -1190,7 +1189,7 @@ mod tests {
             Backend::Actix,
             Database::SQLx,
             Deployment::Docker,
-            vec![Testing::Api, Testing::SQLx, Testing::Mock],
+            vec![Testing::Api, Testing::SQLx],
             vec![Feature::WebSockets],
         )));
     }

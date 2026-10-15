@@ -51,13 +51,8 @@ sled = "0.34"
 [build-dependencies]
 tonic-prost-build = "0.14"
 {%- endif %}
-{%- if 'api' in backend.testing or 'mock' in backend.testing %}
+{%- if 'api' in backend.testing %}
 
 [dev-dependencies]
-{%- if 'api' in backend.testing %}
 tower = { version = "0.5", features = ["util"] }
-{%- endif %}
-{%- if 'mock' in backend.testing %}
-mockall = "0.13"
-{%- endif %}
 {%- endif %}

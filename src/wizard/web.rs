@@ -53,7 +53,7 @@ pub(crate) fn complete(flags: WebFlags, mode: Interaction) -> Result<WebAppSpec>
                 testing,
                 features,
             };
-            let backend = complete_backend(backend, draft, frontend, mode)?;
+            let backend = complete_backend(backend, draft, mode)?;
             Ok(match frontend {
                 None => WebAppSpec::Backend(backend),
                 Some(frontend) => WebAppSpec::Fullstack(FullstackSpec { frontend, backend }),
@@ -89,7 +89,7 @@ fn prompt_full() -> Result<WebAppSpec> {
     match select("Select a webapp kind", WebAppKind::iter().collect())? {
         WebAppKind::Backend => {
             let backend = select("Select a backend", Backend::iter().collect())?;
-            Ok(WebAppSpec::Backend(prompt_backend(backend, None)?))
+            Ok(WebAppSpec::Backend(prompt_backend(backend)?))
         }
         WebAppKind::Frontend => {
             let frontend = select("Select a frontend tech", frontend_options(false))?;
@@ -110,7 +110,7 @@ fn prompt_full() -> Result<WebAppSpec> {
         WebAppKind::Fullstack => {
             let backend = select("Select a backend", Backend::iter().collect())?;
             let frontend = select("Select a frontend tech", frontend_options(true))?;
-            let backend = prompt_backend(backend, Some(frontend))?;
+            let backend = prompt_backend(backend)?;
             Ok(WebAppSpec::Fullstack(FullstackSpec { frontend, backend }))
         }
     }
@@ -119,12 +119,11 @@ fn prompt_full() -> Result<WebAppSpec> {
 /// Ask all backend questions, shared by backend-only and fullstack apps.
 ///
 /// The database question is asked for a Leptos frontend too — server
-/// functions use the connection. Only the testing options shrink: a
-/// Leptos app has no REST layer to mock.
-fn prompt_backend(backend: Backend, frontend: Option<Frontend>) -> Result<BackendSpec> {
+/// functions use the connection.
+fn prompt_backend(backend: Backend) -> Result<BackendSpec> {
     let database = select("Select a database", Database::iter().collect())?;
     let deployment = select("Select a deployment option", Deployment::iter().collect())?;
-    let implemented_testing = implemented_testing(frontend);
+    let implemented_testing = implemented_testing();
     let testing = multi_select("Select testing options", implemented_testing.clone())?;
     validate_testing(&testing, &implemented_testing)?;
     let features = multi_select("Select features", implemented_features())?;
@@ -140,12 +139,10 @@ fn prompt_backend(backend: Backend, frontend: Option<Frontend>) -> Result<Backen
 
 /// Complete the backend spec, asking only for what the flags left open.
 ///
-/// The testing options depend on the frontend like in [`prompt_backend`];
-/// flag-passed values outside the implemented list are rejected by name.
+/// Flag-passed values outside the implemented list are rejected by name.
 fn complete_backend(
     backend: Backend,
     draft: BackendDraft,
-    frontend: Option<Frontend>,
     mode: Interaction,
 ) -> Result<BackendSpec> {
     let database = fill(draft.database, mode, "`--db`", || {
@@ -154,7 +151,7 @@ fn complete_backend(
     let deployment = fill(draft.deployment, mode, "`--deployment`", || {
         select("Select a deployment option", Deployment::iter().collect())
     })?;
-    let implemented_testing = implemented_testing(frontend);
+    let implemented_testing = implemented_testing();
     let testing = fill_multi(draft.testing, mode, || {
         multi_select("Select testing options", implemented_testing.clone())
     })?;
@@ -172,15 +169,13 @@ fn complete_backend(
     })
 }
 
-/// The testing options the templates render for the given frontend. A
-/// Leptos app talks to its backend through server functions over concrete
-/// database handles — there is no trait seam to mock, so `mock` is not
-/// offered (and flag-passed values are rejected by [`validate_testing`]).
-fn implemented_testing(frontend: Option<Frontend>) -> Vec<Testing> {
-    match frontend {
-        Some(Frontend::Leptos) => vec![Testing::Api, Testing::SQLx],
-        _ => Testing::iter().collect(),
-    }
+/// The testing options the templates render. `mock` is offered to no
+/// stack: the generated code has no trait seam for a mock to implement,
+/// so the option would emit a dead dependency and nothing else.
+/// Flag-passed values outside this list are rejected by
+/// [`validate_testing`].
+fn implemented_testing() -> Vec<Testing> {
+    vec![Testing::Api, Testing::SQLx]
 }
 
 /// Reject testing options with no template content for the chosen stack,
@@ -351,15 +346,9 @@ mod tests {
     }
 
     #[test]
-    fn leptos_testing_options_exclude_mock() {
-        let options = implemented_testing(Some(Frontend::Leptos));
-        assert!(options.contains(&Testing::Api));
-        assert!(options.contains(&Testing::SQLx));
-        assert!(!options.contains(&Testing::Mock));
-        // Every other frontend shape offers all testing options.
-        let all = Testing::iter().collect::<Vec<_>>();
-        assert_eq!(implemented_testing(None), all);
-        assert_eq!(implemented_testing(Some(Frontend::Yew)), all);
+    fn mock_testing_is_not_offered() {
+        // No template renders mock content, so no stack offers it.
+        assert_eq!(implemented_testing(), vec![Testing::Api, Testing::SQLx]);
     }
 
     #[test]
@@ -374,11 +363,9 @@ mod tests {
 
     #[test]
     fn implemented_testing_passes_validation() {
-        for frontend in [None, Some(Frontend::Leptos)] {
-            let implemented = implemented_testing(frontend);
-            validate_testing(&implemented.clone(), &implemented)
-                .expect("the implemented list passes its own validation");
-        }
+        let implemented = implemented_testing();
+        validate_testing(&implemented.clone(), &implemented)
+            .expect("the implemented list passes its own validation");
     }
 
     #[test]

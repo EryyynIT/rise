@@ -1,6 +1,6 @@
 ---
 source: src/templates/engine.rs
-expression: "snapshot_output(&backend_spec_full(Backend::Actix, Database::SQLx,\nDeployment::Docker, vec![Testing::Api, Testing::SQLx, Testing::Mock],\nvec![Feature::WebSockets],))"
+expression: "snapshot_output(&backend_spec_full(Backend::Actix, Database::SQLx,\nDeployment::Docker, vec![Testing::Api, Testing::SQLx],\nvec![Feature::WebSockets],))"
 ---
 === .dockerignore ===
 # Keep the build context small and secrets out of image layers.
@@ -27,9 +27,6 @@ actix-web = "4"
 dotenvy = "0.15"
 actix-ws = "0.3"
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }
-
-[dev-dependencies]
-mockall = "0.13"
 
 === Dockerfile ===
 FROM rust:1-slim AS builder

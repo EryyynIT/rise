@@ -114,7 +114,7 @@ fn new_with_testing_adds_test_module_and_dev_dependencies() {
             "--deployment",
             "docker",
             "--testing",
-            "api,sqlx,mock",
+            "api,sqlx",
             "--no-input",
         ])
         .current_dir(tmp.path())
@@ -125,7 +125,6 @@ fn new_with_testing_adds_test_module_and_dev_dependencies() {
     let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read Cargo.toml");
     assert!(cargo_toml.contains("[dev-dependencies]"));
     assert!(cargo_toml.contains("tower"));
-    assert!(cargo_toml.contains("mockall"));
     let main_rs = std::fs::read_to_string(project.join("src/main.rs")).expect("read main.rs");
     assert!(main_rs.contains("mod tests"));
     assert!(main_rs.contains("mod db_tests"));
@@ -825,19 +824,17 @@ fn leptos_fullstack_wires_the_database() {
 }
 
 #[test]
-fn leptos_rejects_mock_testing() {
-    // A Leptos app has no REST layer to mock; every other testing option
-    // and every feature is accepted.
-    let tmp = tempfile::tempdir().expect("tempdir");
+fn mock_testing_is_rejected_for_every_stack() {
+    // No template renders mock content (the generated code has no trait
+    // seam to mock), so the option is rejected up front — here on a
+    // plain backend.
     Command::cargo_bin("rise")
         .expect("binary")
         .args([
             "new",
-            "leptos-app",
+            "mock-app",
             "--backend",
             "axum",
-            "--frontend",
-            "leptos",
             "--db",
             "sqlx",
             "--testing",
@@ -846,12 +843,15 @@ fn leptos_rejects_mock_testing() {
             "docker",
             "--no-input",
         ])
-        .current_dir(tmp.path())
         .assert()
         .failure()
         .stderr(predicate::str::contains(
             "testing options not available for this stack: mock",
         ));
+
+    // Every other testing option and every feature is accepted, leptos
+    // included.
+    let tmp = tempfile::tempdir().expect("tempdir");
 
     Command::cargo_bin("rise")
         .expect("binary")

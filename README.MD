@@ -50,7 +50,7 @@ Everything the wizard asks is also a flag on `rise new`:
 | Flag | Values | Notes |
 |---|---|---|
 | `NAME` | a valid crate name | positional; asked first when omitted |
-| `--kind` | `web`, `cli`, `library` | inferred as `web` when any web flag is passed |
+| `--kind` | `web`, `cli`, `library`, `game` | inferred as `web` when any web flag is passed |
 | `--backend` | `axum`, `actix` | alone → backend-only; with `--frontend` → fullstack |
 | `--frontend` | `yew`, `leptos`, `askama`, `tera`, `minijinja`, `handlebars` | `yew` → WASM SPA (alone) or workspace member (with a backend); `leptos` → trunk-built csr SPA (alone) or a single-crate SSR + hydration app built with cargo-leptos (with a backend); the rest are server-side template engines |
 | `--db` | `sqlx`, `diesel`, `sea-orm`, `sled` | wires a connection module + `.env.example` — sqlx pool, SeaORM connection, Diesel r2d2 pool, sled store; leptos apps get it in their server functions |
@@ -66,8 +66,9 @@ where the backend serves the API and the built frontend bundle) or a Leptos
 frontend (a single crate built with cargo-leptos — server-side rendering plus
 hydration, database wired into server functions, the same testing and feature
 options as the REST backends), frontend-only Yew and Leptos
-SPAs built with trunk, plus `--kind cli` and `--kind library`.
-Other combinations the flags accept (`rocket`, `seed`, `embedded`, `game`, ...)
+SPAs built with trunk, plus `--kind cli`, `--kind library` and `--kind game`
+(a playable macroquad window — move with arrows/WASD, collect coins).
+Other combinations the flags accept (`rocket`, `seed`, `embedded`, ...)
 end with a typed "not available yet" error — that's the roadmap, not a broken
 promise.
 
@@ -104,7 +105,7 @@ The manifest format, render context and rendering rules are documented in [docs/
 Selection for:
 -[x] WebApps
 -[x] CLI
--[] Gamedev
+-[x] Gamedev
 -[] Embedded
 -[x] Libraries
 - More, you're free to give more ideas!
@@ -112,7 +113,7 @@ Selection for:
 Generation for:
 -[/] WebApps (backend-only Axum and Actix Web — database wiring, tests, WebSockets, gRPC, GraphQL and rate limiting generated from your choices — fullstack with Askama, Tera, Minijinja or Handlebars, Leptos SSR + hydration apps built with cargo-leptos (database wired into server functions, same tests and features), and Yew or Leptos WASM frontends: standalone trunk SPAs or — Yew — a fullstack workspace)
 -[x] CLI
--[] Gamedev
+-[x] Gamedev
 -[] Embedded
 -[x] Libraries
 - More (if you wish to add something)

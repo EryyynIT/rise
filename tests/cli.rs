@@ -361,7 +361,7 @@ fn new_generates_actix_project_without_prompts() {
             "--db",
             "sqlx",
             "--deployment",
-            "kubernetes",
+            "self-hosted",
             "--no-input",
         ])
         .current_dir(tmp.path())
@@ -376,7 +376,7 @@ fn new_generates_actix_project_without_prompts() {
     assert!(main_rs.contains("Hello from sample-actix!"));
     assert!(
         !project.join("Dockerfile").exists(),
-        "kubernetes excludes it"
+        "self-hosted excludes it"
     );
 }
 

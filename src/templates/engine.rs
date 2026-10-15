@@ -698,7 +698,7 @@ mod tests {
 
         render_test(
             &template,
-            &backend_spec(Backend::Axum, Deployment::Kubernetes),
+            &backend_spec(Backend::Axum, Deployment::SelfHosted),
             "app",
             tmp.path(),
         )
@@ -752,7 +752,7 @@ mod tests {
 
         render_test(
             &template,
-            &backend_spec(Backend::Actix, Deployment::Kubernetes),
+            &backend_spec(Backend::Actix, Deployment::SelfHosted),
             "app",
             tmp.path(),
         )
@@ -1149,10 +1149,10 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_web_axum_kubernetes() {
+    fn snapshot_web_axum_self_hosted() {
         insta::assert_snapshot!(snapshot_output(&backend_spec(
             Backend::Axum,
-            Deployment::Kubernetes
+            Deployment::SelfHosted
         )));
     }
 
@@ -1165,10 +1165,10 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_web_actix_kubernetes() {
+    fn snapshot_web_actix_self_hosted() {
         insta::assert_snapshot!(snapshot_output(&backend_spec(
             Backend::Actix,
-            Deployment::Kubernetes
+            Deployment::SelfHosted
         )));
     }
 
@@ -1199,7 +1199,7 @@ mod tests {
         insta::assert_snapshot!(snapshot_output(&backend_spec_full(
             Backend::Axum,
             Database::Diesel,
-            Deployment::Kubernetes,
+            Deployment::SelfHosted,
             vec![],
             vec![],
         )));

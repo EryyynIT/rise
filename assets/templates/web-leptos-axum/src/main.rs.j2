@@ -88,11 +88,12 @@ async fn main() {
         .with_state(leptos_options);
 {%- if 'rate-limiting' in backend.features %}
 
-    // Rate limit requests per client IP: bursts of up to 5 requests,
-    // then one request every 2 seconds on average.
+    // Rate limit requests per client IP. The burst must fit a leptos page
+    // load (HTML + JS + WASM + CSS + favicon) with room for server
+    // function calls, then refills at one request every 2 seconds.
     let governor_conf = GovernorConfigBuilder::default()
         .per_second(2)
-        .burst_size(5)
+        .burst_size(50)
         .finish()
         .expect("valid rate limiter configuration");
     // Governor's storage grows unboundedly without periodic cleanup.

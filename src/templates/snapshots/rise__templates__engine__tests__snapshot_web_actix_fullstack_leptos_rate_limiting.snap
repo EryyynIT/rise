@@ -245,11 +245,12 @@ async fn main() -> std::io::Result<()> {
 
     let conf = get_configuration(None).expect("failed to load leptos configuration");
     let addr = conf.leptos_options.site_addr;
-    // Rate limit requests per client IP: bursts of up to 5 requests,
-    // then two requests per second on average.
+    // Rate limit requests per client IP. The burst must fit a leptos page
+    // load (HTML + JS + WASM + CSS + favicon) with room for server
+    // function calls, then refills at two requests per second.
     let governor_conf = GovernorConfigBuilder::default()
         .requests_per_second(2)
-        .burst_size(5)
+        .burst_size(50)
         .finish()
         .expect("valid rate limiter configuration");
     let db = db::create_pool().await.expect("failed to connect to database");

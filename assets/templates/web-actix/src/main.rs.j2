@@ -30,6 +30,9 @@ use std::sync::LazyLock;
 {%- endif %}
 
 mod db;
+{%- if 'grpc' in backend.features %}
+mod grpc;
+{%- endif %}
 {%- if frontend == 'askama' %}
 
 /// Home page: rendered from `templates/index.html` at compile time.
@@ -221,6 +224,14 @@ async fn main() -> std::io::Result<()> {
     let schema = Schema::build(QueryRoot, EmptyMutation, EmptySubscription).finish();
 {%- endif %}
     println!("listening on http://localhost:3000");
+{%- if 'grpc' in backend.features %}
+    // The gRPC API runs on its own port, next to the HTTP server.
+    tokio::spawn(async {
+        if let Err(err) = grpc::serve().await {
+            eprintln!("gRPC server error: {err}");
+        }
+    });
+{%- endif %}
     HttpServer::new(move || {
 {%- if 'rate-limiting' in backend.features %}
         let app = App::new()

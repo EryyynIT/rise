@@ -68,13 +68,22 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
         _ => None,
     };
     if let Some(database) = database {
-        let dir = if fullstack_wasm { "backend/" } else { "" };
         let var = if database == Database::Sled {
             "DB_PATH"
         } else {
             "DATABASE_URL"
         };
-        out.push_str(&format!("  cp {dir}.env.example {dir}.env  # set {var}\n"));
+        // In a WASM workspace dotenvy must find the .env from the
+        // workspace root (`cargo run -p <name>-backend` runs there):
+        // dotenvy searches the working directory and its PARENTS, so a
+        // backend/.env would never be seen. A root .env works from the
+        // root and from backend/ alike, and the root .gitignore covers it.
+        let (src, dst) = if fullstack_wasm {
+            ("backend/.env.example", ".env")
+        } else {
+            (".env.example", ".env")
+        };
+        out.push_str(&format!("  cp {src} {dst}  # set {var}\n"));
     }
     if wasm_frontend {
         out.push_str(

@@ -617,7 +617,10 @@ fn new_generates_yew_fullstack_workspace_without_prompts() {
         .success()
         .stdout(predicate::str::contains("created ./wasm-app"))
         .stdout(predicate::str::contains("cargo run -p wasm-app-backend"))
-        .stdout(predicate::str::contains("cd frontend && trunk serve"));
+        .stdout(predicate::str::contains("cd frontend && trunk serve"))
+        // dotenvy searches the working directory and its parents: the
+        // .env belongs at the workspace root, not in backend/.
+        .stdout(predicate::str::contains("cp backend/.env.example .env"));
 
     let project = tmp.path().join("wasm-app");
     let root = std::fs::read_to_string(project.join("Cargo.toml")).expect("read workspace");

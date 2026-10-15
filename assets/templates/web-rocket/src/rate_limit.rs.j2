@@ -1,0 +1,116 @@
+//! Per-IP rate limiting as a rocket fairing.
+//!
+//! In-memory token buckets — no external service needed. Each client IP
+//! gets bursts of up to 5 requests, then one request every 2 seconds on
+//! average; excess requests are answered `429 Too Many Requests`.
+
+use std::collections::HashMap;
+use std::net::IpAddr;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+use rocket::fairing::{Fairing, Info, Kind};
+use rocket::http::Status;
+use rocket::{Data, Request, Response};
+
+/// How long one token takes to refill.
+const REFILL_INTERVAL: Duration = Duration::from_secs(2);
+/// Bucket capacity — the largest burst a client may send.
+const CAPACITY: f64 = 5.0;
+/// Buckets idle this long are dropped by the cleanup thread.
+const IDLE_TIMEOUT: Duration = Duration::from_secs(600);
+
+/// The fairing; attach it with `.attach(RateLimit::new())`.
+pub struct RateLimit {
+    buckets: Arc<Mutex<HashMap<IpAddr, Bucket>>>,
+}
+
+impl RateLimit {
+    /// Create the fairing and spawn the background thread evicting stale
+    /// buckets — without it the map grows with every new client IP.
+    pub fn new() -> Self {
+        let buckets: Arc<Mutex<HashMap<IpAddr, Bucket>>> = Arc::new(Mutex::new(HashMap::new()));
+        let cleanup = Arc::clone(&buckets);
+        std::thread::spawn(move || {
+            loop {
+                std::thread::sleep(Duration::from_secs(60));
+                cleanup
+                    .lock()
+                    .unwrap_or_else(|err| err.into_inner())
+                    .retain(|_, bucket| bucket.touched.elapsed() < IDLE_TIMEOUT);
+            }
+        });
+        Self { buckets }
+    }
+}
+
+impl Default for RateLimit {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// One client's token bucket.
+struct Bucket {
+    tokens: f64,
+    touched: Instant,
+}
+
+impl Bucket {
+    fn full() -> Self {
+        Self {
+            tokens: CAPACITY,
+            touched: Instant::now(),
+        }
+    }
+
+    /// Refill for the elapsed time, then take one token; `false` when the
+    /// bucket is empty.
+    fn take(&mut self) -> bool {
+        let refill = self.touched.elapsed().as_secs_f64() / REFILL_INTERVAL.as_secs_f64();
+        self.tokens = (self.tokens + refill).min(CAPACITY);
+        self.touched = Instant::now();
+        if self.tokens >= 1.0 {
+            self.tokens -= 1.0;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+/// Marks a rejected request in the request-local cache; the response half
+/// of the fairing turns the mark into a `429`.
+#[derive(Clone)]
+struct Rejected(bool);
+
+#[rocket::async_trait]
+impl Fairing for RateLimit {
+    fn info(&self) -> Info {
+        Info {
+            name: "Per-IP rate limiting",
+            kind: Kind::Request | Kind::Response,
+        }
+    }
+
+    async fn on_request(&self, request: &mut Request<'_>, _: &mut Data<'_>) {
+        let Some(ip) = request.client_ip() else {
+            return;
+        };
+        let allowed = self
+            .buckets
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .entry(ip)
+            .or_insert_with(Bucket::full)
+            .take();
+        request.local_cache(|| Rejected(!allowed));
+    }
+
+    async fn on_response<'r>(&self, request: &'r Request<'_>, response: &mut Response<'r>) {
+        if request.local_cache(|| Rejected(false)).0 {
+            response.set_status(Status::TooManyRequests);
+            response.set_sized_body(0, std::io::Cursor::new(""));
+        }
+    }
+}

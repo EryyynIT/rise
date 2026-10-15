@@ -1,0 +1,4 @@
+# Keep the build context small and secrets out of image layers.
+.git
+/target
+.env

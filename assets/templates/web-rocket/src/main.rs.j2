@@ -1,0 +1,298 @@
+use rocket::routes;
+{%- if frontend == 'yew' %}
+use rocket::fs::{FileServer, NamedFile};
+use std::path::PathBuf;
+{%- endif %}
+{%- if frontend and frontend != 'yew' %}
+use rocket::http::Status;
+use rocket::response::content::RawHtml;
+{%- endif %}
+{%- if 'web-sockets' in backend.features %}
+use rocket::futures::{SinkExt, StreamExt};
+use rocket_ws::{Channel, WebSocket};
+{%- endif %}
+{%- if 'graph-ql' in backend.features %}
+use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema, http::GraphiQLSource};
+use async_graphql_rocket::{GraphQLQuery, GraphQLRequest, GraphQLResponse};
+use rocket::State;
+{%- if not (frontend and frontend != 'yew') %}
+use rocket::response::content::RawHtml;
+{%- endif %}
+{%- endif %}
+{%- if frontend == 'askama' %}
+use askama::Template;
+{%- elif frontend == 'tera' %}
+use std::sync::LazyLock;
+use tera::{Context, Tera};
+{%- elif frontend == 'minijinja' %}
+use minijinja::{Environment, context};
+use std::sync::LazyLock;
+{%- elif frontend == 'handlebars' %}
+use handlebars::Handlebars;
+use serde_json::json;
+use std::sync::LazyLock;
+{%- endif %}
+
+mod db;
+{%- if 'grpc' in backend.features %}
+mod grpc;
+{%- endif %}
+{%- if 'rate-limiting' in backend.features %}
+mod rate_limit;
+{%- endif %}
+{%- if 'graph-ql' in backend.features %}
+
+/// The GraphQL schema type: one `hello` query to get started.
+type AppSchema = Schema<QueryRoot, EmptyMutation, EmptySubscription>;
+{%- endif %}
+
+#[rocket::main]
+async fn main() -> Result<(), rocket::Error> {
+    // Loads .env when present (DATABASE_URL & co.); absent is fine.
+    let _ = dotenvy::dotenv();
+{%- if backend.database == 'sqlx' %}
+    let db = db::create_pool().await.expect("failed to connect to database");
+{%- elif backend.database == 'sea-orm' %}
+    let db = db::connect().await.expect("failed to connect to database");
+{%- elif backend.database == 'diesel' %}
+    let db = db::create_pool();
+{%- elif backend.database == 'sled' %}
+    let db = db::open().expect("failed to open the database");
+{%- endif %}
+{%- if 'graph-ql' in backend.features %}
+    // The database handle is shared with the GraphQL resolvers as context data.
+    let schema = Schema::build(QueryRoot, EmptyMutation, EmptySubscription)
+        .data(db.clone())
+        .finish();
+{%- endif %}
+    // Listen on 0.0.0.0:3000 like every other backend rise generates;
+    // rocket's own defaults are 127.0.0.1:8000.
+    let config = rocket::Config {
+        address: std::net::Ipv4Addr::UNSPECIFIED.into(),
+        port: 3000,
+        ..Default::default()
+    };
+    let rocket = rocket::custom(config)
+        .manage(db)
+{%- if 'graph-ql' in backend.features %}
+        .manage(schema)
+{%- endif %}
+{%- if frontend == 'yew' %}
+        .mount("/", routes![hello])
+        // Serve the WASM bundle built by trunk (`frontend/dist`) next to the API.
+        .mount("/", FileServer::from("frontend/dist"))
+        .mount("/", routes![spa_fallback]);
+{%- else %}
+        .mount("/", routes![root]);
+{%- endif %}
+{%- if 'web-sockets' in backend.features %}
+    let rocket = rocket.mount("/", routes![ws_echo]);
+{%- endif %}
+{%- if 'graph-ql' in backend.features %}
+    let rocket = rocket.mount("/", routes![graphiql, graphql_query, graphql_request]);
+{%- endif %}
+{%- if 'rate-limiting' in backend.features %}
+    let rocket = rocket.attach(rate_limit::RateLimit::new());
+{%- endif %}
+{%- if 'grpc' in backend.features %}
+    // The gRPC API runs on its own port, next to the HTTP server. `main`
+    // already runs inside rocket's tokio runtime (`#[rocket::main]`).
+    rocket::tokio::spawn(async {
+        if let Err(err) = grpc::serve().await {
+            eprintln!("gRPC server error: {err}");
+        }
+    });
+{%- endif %}
+
+    println!("listening on http://localhost:3000");
+    rocket.launch().await?;
+    Ok(())
+}
+{%- if frontend == 'askama' %}
+
+/// Home page: rendered from `templates/index.html` at compile time.
+#[derive(Template)]
+#[template(path = "index.html")]
+struct IndexTemplate {
+    name: String,
+}
+
+#[rocket::get("/")]
+fn root() -> Result<RawHtml<String>, Status> {
+    let template = IndexTemplate {
+        name: "{{ name }}".to_owned(),
+    };
+    template
+        .render()
+        .map(RawHtml)
+        .map_err(|_| Status::InternalServerError)
+}
+{%- elif frontend == 'tera' %}
+
+/// Templates are embedded into the binary, so the app runs from any
+/// working directory (including the slim Docker image).
+static TEMPLATES: LazyLock<Tera> = LazyLock::new(|| {
+    let mut tera = Tera::default();
+    tera.add_raw_template("index.html", include_str!("../templates/index.html"))
+        .expect("failed to compile template");
+    tera
+});
+
+#[rocket::get("/")]
+fn root() -> Result<RawHtml<String>, Status> {
+    let mut context = Context::new();
+    context.insert("name", "{{ name }}");
+    TEMPLATES
+        .render("index.html", &context)
+        .map(RawHtml)
+        .map_err(|_| Status::InternalServerError)
+}
+{%- elif frontend == 'minijinja' %}
+
+/// Templates are embedded into the binary, so the app runs from any
+/// working directory (including the slim Docker image).
+static TEMPLATES: LazyLock<Environment<'static>> = LazyLock::new(|| {
+    let mut env = Environment::new();
+    env.add_template("index.html", include_str!("../templates/index.html"))
+        .expect("failed to compile template");
+    env
+});
+
+#[rocket::get("/")]
+fn root() -> Result<RawHtml<String>, Status> {
+    TEMPLATES
+        .get_template("index.html")
+        .and_then(|template| template.render(context! { name => "{{ name }}" }))
+        .map(RawHtml)
+        .map_err(|_| Status::InternalServerError)
+}
+{%- elif frontend == 'handlebars' %}
+
+/// Templates are embedded into the binary, so the app runs from any
+/// working directory (including the slim Docker image).
+static TEMPLATES: LazyLock<Handlebars<'static>> = LazyLock::new(|| {
+    let mut handlebars = Handlebars::new();
+    handlebars
+        .register_template_string("index", include_str!("../templates/index.hbs"))
+        .expect("failed to compile template");
+    handlebars
+});
+
+#[rocket::get("/")]
+fn root() -> Result<RawHtml<String>, Status> {
+    TEMPLATES
+        .render("index", &json!({ "name": "{{ name }}" }))
+        .map(RawHtml)
+        .map_err(|_| Status::InternalServerError)
+}
+{%- elif frontend == 'yew' %}
+
+/// Greeting for the WASM frontend.
+#[rocket::get("/api/hello")]
+fn hello() -> &'static str {
+    "Hello from {{ name }}!"
+}
+
+/// SPA fallback: anything that is neither an API route nor a file in
+/// `frontend/dist` gets the frontend's `index.html`. The rank keeps it
+/// behind the file server's routes (rank 10).
+#[rocket::get("/<_path..>", rank = 20)]
+async fn spa_fallback(_path: PathBuf) -> Option<NamedFile> {
+    NamedFile::open("frontend/dist/index.html").await.ok()
+}
+{%- else %}
+
+#[rocket::get("/")]
+fn root() -> &'static str {
+    "Hello from {{ name }}!"
+}
+{%- endif %}
+{%- if 'graph-ql' in backend.features %}
+
+/// The GraphQL schema: one `hello` field to get started.
+struct QueryRoot;
+
+#[Object]
+impl QueryRoot {
+    async fn hello(&self) -> &str {
+        "Hello from {{ name }}!"
+    }
+}
+
+/// Interactive GraphQL IDE on GET /graphql without a query string.
+#[rocket::get("/graphql", rank = 2)]
+fn graphiql() -> RawHtml<String> {
+    RawHtml(GraphiQLSource::build().endpoint("/graphql").finish())
+}
+
+/// GraphQL endpoint over GET: `/graphql?query={ hello }`.
+#[rocket::get("/graphql?<query..>")]
+async fn graphql_query(schema: &State<AppSchema>, query: GraphQLQuery) -> GraphQLResponse {
+    query.execute(schema.inner()).await
+}
+
+/// GraphQL endpoint over POST with a JSON body.
+#[rocket::post("/graphql", data = "<request>", format = "application/json")]
+async fn graphql_request(schema: &State<AppSchema>, request: GraphQLRequest) -> GraphQLResponse {
+    request.execute(schema.inner()).await
+}
+{%- endif %}
+{%- if 'web-sockets' in backend.features %}
+
+/// WebSocket echo endpoint: sends every message back.
+#[rocket::get("/ws")]
+fn ws_echo(ws: WebSocket) -> Channel<'static> {
+    ws.channel(|mut stream| {
+        Box::pin(async move {
+            while let Some(message) = stream.next().await {
+                stream.send(message?).await?;
+            }
+            Ok(())
+        })
+    })
+}
+{%- endif %}
+{%- if 'api' in backend.testing %}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rocket::local::blocking::Client;
+
+    #[test]
+    fn root_says_hello() {
+{%- if frontend == 'yew' %}
+        let rocket = rocket::build().mount("/", routes![hello]);
+        let path = "/api/hello";
+{%- else %}
+        let rocket = rocket::build().mount("/", routes![root]);
+        let path = "/";
+{%- endif %}
+        let client = Client::tracked(rocket).expect("valid rocket");
+        let response = client.get(path).dispatch();
+        assert_eq!(response.status(), rocket::http::Status::Ok);
+    }
+}
+{%- endif %}
+{%- if 'sqlx' in backend.testing and backend.database == 'sqlx' %}
+
+#[cfg(test)]
+mod db_tests {
+    #[test]
+    #[ignore = "needs a running Postgres (set DATABASE_URL)"]
+    fn pool_connects() {
+        // rocket's own tokio runtime, so the generated project needs no
+        // direct tokio dependency.
+        rocket::tokio::runtime::Runtime::new()
+            .expect("tokio runtime")
+            .block_on(async {
+                let pool = crate::db::create_pool().await.expect("connect");
+                let row: (i64,) = sqlx::query_as("SELECT 1")
+                    .fetch_one(&pool)
+                    .await
+                    .expect("query");
+                assert_eq!(row.0, 1);
+            });
+    }
+}
+{%- endif %}

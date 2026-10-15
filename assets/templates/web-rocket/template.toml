@@ -1,0 +1,23 @@
+name = "web-rocket"
+description = "Rocket backend, optionally with a server-side template engine"
+
+# File conditionality lives here, not in Rust code. Keys are OUTPUT paths
+# (`.j2` already stripped); when the expression — evaluated against the
+# render context — is true, the file is skipped.
+[files.exclude_if]
+# A WASM-fullstack workspace ships its own Dockerfile and .gitignore
+# at the root.
+Dockerfile = "backend.deployment != 'docker' or workspace"
+".dockerignore" = "backend.deployment != 'docker' or workspace"
+".gitignore" = "workspace"
+# Handlebars uses its own .hbs file; askama/tera/minijinja share index.html;
+# every other frontend (or none) ships neither.
+"templates/index.html" = "frontend not in ['askama', 'tera', 'minijinja']"
+"templates/index.hbs" = "frontend != 'handlebars'"
+# The gRPC service definition, its build script and the service module only
+# exist with the feature.
+"build.rs" = "'grpc' not in backend.features"
+"proto/hello.proto" = "'grpc' not in backend.features"
+"src/grpc.rs" = "'grpc' not in backend.features"
+# The rate limiting fairing only exists with the feature.
+"src/rate_limit.rs" = "'rate-limiting' not in backend.features"

@@ -1,0 +1,45 @@
+[package]
+name = "{{ crate_name }}"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rocket = "0.5"
+# Loads .env (DATABASE_URL & co.) into the environment at startup.
+dotenvy = "0.15"
+{%- if 'web-sockets' in backend.features %}
+rocket_ws = "0.1"
+{%- endif %}
+{%- if 'graph-ql' in backend.features %}
+async-graphql = "7"
+async-graphql-rocket = "7"
+{%- endif %}
+{%- if 'grpc' in backend.features %}
+tonic = "0.14"
+tonic-prost = "0.14"
+prost = "0.14"
+{%- endif %}
+{%- if frontend == 'askama' %}
+askama = "0.16"
+{%- elif frontend == 'tera' %}
+tera = "2"
+{%- elif frontend == 'minijinja' %}
+minijinja = "3"
+{%- elif frontend == 'handlebars' %}
+handlebars = "6"
+serde_json = "1"
+{%- endif %}
+{%- if backend.database == 'sqlx' %}
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }
+{%- elif backend.database == 'diesel' %}
+diesel = { version = "2", features = ["postgres", "r2d2"] }
+{%- elif backend.database == 'sea-orm' %}
+sea-orm = { version = "1", features = ["sqlx-postgres", "runtime-tokio-rustls"] }
+{%- elif backend.database == 'sled' %}
+sled = "0.34"
+{%- endif %}
+{%- if 'grpc' in backend.features %}
+
+[build-dependencies]
+tonic-prost-build = "0.14"
+{%- endif %}

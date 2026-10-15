@@ -298,7 +298,8 @@ Dockerfile = "spec.WebApp.Backend.deployment != 'docker'"
                 "web-actix",
                 "web-axum",
                 "web-leptos-actix",
-                "web-leptos-axum"
+                "web-leptos-axum",
+                "web-rocket"
             ]
         );
     }

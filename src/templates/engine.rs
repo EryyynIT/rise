@@ -447,13 +447,37 @@ mod tests {
     }
 
     fn fullstack_spec_tested(backend: Backend, frontend: Frontend) -> ProjectSpec {
+        fullstack_spec_full(
+            backend,
+            frontend,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![Testing::Api],
+        )
+    }
+
+    fn fullstack_spec_with_db(
+        backend: Backend,
+        frontend: Frontend,
+        database: Database,
+    ) -> ProjectSpec {
+        fullstack_spec_full(backend, frontend, database, Deployment::Docker, vec![])
+    }
+
+    fn fullstack_spec_full(
+        backend: Backend,
+        frontend: Frontend,
+        database: Database,
+        deployment: Deployment,
+        testing: Vec<Testing>,
+    ) -> ProjectSpec {
         ProjectSpec::WebApp(WebAppSpec::Fullstack(FullstackSpec {
             frontend,
             backend: BackendSpec {
                 backend,
-                database: Database::SQLx,
-                deployment: Deployment::Docker,
-                testing: vec![Testing::Api],
+                database,
+                deployment,
+                testing,
                 features: vec![],
             },
         }))
@@ -1399,6 +1423,45 @@ mod tests {
         insta::assert_snapshot!(snapshot_output(&fullstack_spec(
             Backend::Actix,
             Frontend::Leptos
+        )));
+    }
+
+    // Diesel covers the blocking wrapper (spawn_blocking / web::block) and
+    // the libpq lines in the Dockerfile on both backends.
+    #[test]
+    fn snapshot_web_axum_fullstack_leptos_diesel() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_with_db(
+            Backend::Axum,
+            Frontend::Leptos,
+            Database::Diesel
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_fullstack_leptos_diesel() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_with_db(
+            Backend::Actix,
+            Frontend::Leptos,
+            Database::Diesel
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_axum_fullstack_leptos_sea_orm() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_with_db(
+            Backend::Axum,
+            Frontend::Leptos,
+            Database::SeaORM
+        )));
+    }
+
+    // sled covers DB_PATH in .env.example and /data in .gitignore.
+    #[test]
+    fn snapshot_web_actix_fullstack_leptos_sled() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_with_db(
+            Backend::Actix,
+            Frontend::Leptos,
+            Database::Sled
         )));
     }
 

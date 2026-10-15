@@ -750,6 +750,42 @@ fn new_generates_leptos_actix_fullstack_without_prompts() {
 }
 
 #[test]
+fn leptos_fullstack_wires_the_database() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "leptos-app",
+            "--backend",
+            "axum",
+            "--frontend",
+            "leptos",
+            "--db",
+            "sled",
+            "--deployment",
+            "self-hosted",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("DB_PATH"));
+
+    let project = tmp.path().join("leptos-app");
+    let env_example =
+        std::fs::read_to_string(project.join(".env.example")).expect("read .env.example");
+    assert!(env_example.contains("DB_PATH"));
+    let gitignore = std::fs::read_to_string(project.join(".gitignore")).expect("read .gitignore");
+    assert!(gitignore.contains("/data"));
+    let main_rs = std::fs::read_to_string(project.join("src/main.rs")).expect("read main.rs");
+    assert!(main_rs.contains("db::open()"));
+    let app_rs = std::fs::read_to_string(project.join("src/app.rs")).expect("read app.rs");
+    assert!(app_rs.contains("use_context::<sled::Db>()"));
+}
+
+#[test]
 fn leptos_rejects_backend_stack_options() {
     Command::cargo_bin("rise")
         .expect("binary")

@@ -211,7 +211,7 @@ fn template_plan(spec: &ProjectSpec, name: &ProjectName) -> Result<Vec<TemplateS
         ProjectSpec::CliApp => Ok(vec![TemplateStep::root("cli", name)]),
         ProjectSpec::Library => Ok(vec![TemplateStep::root("library", name)]),
         ProjectSpec::Embedded => Err(Error::TemplateNotFound("embedded".into())),
-        ProjectSpec::Game => Err(Error::TemplateNotFound("game".into())),
+        ProjectSpec::Game => Ok(vec![TemplateStep::root("game-macroquad", name)]),
     }
 }
 
@@ -531,6 +531,13 @@ mod tests {
     }
 
     #[test]
+    fn game_plans_the_game_macroquad_template() {
+        let name = project_name("app");
+        let plan = template_plan(&ProjectSpec::Game, &name).expect("plan");
+        assert_eq!(plan, vec![TemplateStep::root("game-macroquad", &name)]);
+    }
+
+    #[test]
     fn unsupported_stack_is_template_not_found() {
         let name = project_name("app");
         let err = template_plan(&backend_spec(Backend::Rocket, Deployment::Docker), &name)
@@ -788,6 +795,21 @@ mod tests {
         assert!(lib_rs.contains("mathlib"));
         assert!(lib_rs.contains("#[cfg(test)]"));
         assert!(!tmp.path().join("src/main.rs").exists());
+    }
+
+    #[test]
+    fn game_template_renders_a_macroquad_loop() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("game-macroquad").expect("template");
+
+        render_test(&template, &ProjectSpec::Game, "coincatcher", tmp.path()).expect("render");
+
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        assert!(cargo_toml.contains("name = \"coincatcher\""));
+        assert!(cargo_toml.contains("macroquad"));
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("macroquad::main"));
+        assert!(main_rs.contains("coincatcher"));
     }
 
     #[test]
@@ -1366,6 +1388,11 @@ mod tests {
     #[test]
     fn snapshot_library() {
         insta::assert_snapshot!(snapshot_output(&ProjectSpec::Library));
+    }
+
+    #[test]
+    fn snapshot_game() {
+        insta::assert_snapshot!(snapshot_output(&ProjectSpec::Game));
     }
 
     #[test]

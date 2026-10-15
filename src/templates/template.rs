@@ -292,6 +292,7 @@ Dockerfile = "spec.WebApp.Backend.deployment != 'docker'"
                 "cli",
                 "frontend-leptos",
                 "frontend-yew",
+                "game-macroquad",
                 "library",
                 "web-actix",
                 "web-axum",

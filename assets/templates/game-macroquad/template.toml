@@ -1,0 +1,2 @@
+name = "game-macroquad"
+description = "Game on macroquad: window, game loop, a player and coins to collect"

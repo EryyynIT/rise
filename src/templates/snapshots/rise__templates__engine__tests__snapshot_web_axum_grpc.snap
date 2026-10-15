@@ -100,7 +100,6 @@ use tonic::{Request, Response, Status};
 tonic::include_proto!("hello");
 
 /// Greeter service implementation.
-#[derive(Debug, Default)]
 pub struct GreeterImpl;
 
 #[tonic::async_trait]

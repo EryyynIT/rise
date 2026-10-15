@@ -188,7 +188,9 @@ mod tests {
     use leptos_actix::{LeptosRoutes, generate_route_list};
     use leptos_meta::MetaTags;
     use {{ crate_ident }}::app::*;
+{%- if backend.database != 'sled' %}
     use {{ crate_ident }}::db;
+{%- endif %}
 
     /// The generated server function answers over HTTP end to end:
     /// routing, the request context and the database handle. Run with

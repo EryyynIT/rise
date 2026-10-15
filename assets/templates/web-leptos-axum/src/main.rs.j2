@@ -186,7 +186,9 @@ async fn handle_socket(mut socket: WebSocket) {
 #[cfg(all(test, feature = "ssr"))]
 mod tests {
     use {{ crate_ident }}::app::{App, DatabaseStatus, shell};
+{%- if backend.database != 'sled' %}
     use {{ crate_ident }}::db;
+{%- endif %}
     use axum::{
         Router,
         body::Body,

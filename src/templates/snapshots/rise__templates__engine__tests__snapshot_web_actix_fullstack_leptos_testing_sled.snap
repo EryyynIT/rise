@@ -298,7 +298,6 @@ mod tests {
     use leptos_actix::{LeptosRoutes, generate_route_list};
     use leptos_meta::MetaTags;
     use sample_app::app::*;
-    use sample_app::db;
 
     /// The generated server function answers over HTTP end to end:
     /// routing, the request context and the database handle. Run with

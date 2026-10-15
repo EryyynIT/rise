@@ -1,0 +1,78 @@
+---
+source: src/templates/engine.rs
+expression: "snapshot_output(&backend_spec_full(Backend::Rocket, Database::Diesel,\nDeployment::SelfHosted, vec![], vec![],))"
+---
+=== .env.example ===
+DATABASE_URL=postgres://postgres:postgres@localhost/sample_app
+
+=== .gitignore ===
+/target
+.env
+
+=== Cargo.toml ===
+[package]
+name = "sample-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rocket = "0.5"
+# Loads .env (DATABASE_URL & co.) into the environment at startup.
+dotenvy = "0.15"
+diesel = { version = "2", features = ["postgres", "r2d2"] }
+
+=== src/db.rs ===
+//! Database connection pool (Diesel + r2d2 + Postgres).
+
+use diesel::{
+    PgConnection,
+    r2d2::{ConnectionManager, Pool},
+};
+
+/// Synchronous Diesel connections, pooled for use from async handlers.
+pub type DbPool = Pool<ConnectionManager<PgConnection>>;
+
+/// Build the pool from the `DATABASE_URL` environment variable.
+///
+/// Copy `.env.example` to `.env` and adjust the URL for your database.
+/// The pool is lazy — it opens connections on first use — so the app
+/// starts without a live database. Diesel is a blocking ORM: run queries
+/// inside `rocket::tokio::task::spawn_blocking`.
+pub fn create_pool() -> DbPool {
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let manager = ConnectionManager::<PgConnection>::new(database_url);
+    Pool::builder()
+        .max_size(5)
+        .build(manager)
+        .expect("failed to build the database pool")
+}
+=== src/main.rs ===
+use rocket::routes;
+
+mod db;
+
+#[rocket::main]
+async fn main() -> Result<(), rocket::Error> {
+    // Loads .env when present (DATABASE_URL & co.); absent is fine.
+    let _ = dotenvy::dotenv();
+    let db = db::create_pool();
+    // Listen on 0.0.0.0:3000 like every other backend rise generates;
+    // rocket's own defaults are 127.0.0.1:8000.
+    let config = rocket::Config {
+        address: std::net::Ipv4Addr::UNSPECIFIED.into(),
+        port: 3000,
+        ..Default::default()
+    };
+    let rocket = rocket::custom(config)
+        .manage(db)
+        .mount("/", routes![root]);
+
+    println!("listening on http://localhost:3000");
+    rocket.launch().await?;
+    Ok(())
+}
+
+#[rocket::get("/")]
+fn root() -> &'static str {
+    "Hello from sample-app!"
+}

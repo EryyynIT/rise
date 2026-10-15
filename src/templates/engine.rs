@@ -135,6 +135,7 @@ fn template_plan(spec: &ProjectSpec, name: &ProjectName) -> Result<Vec<TemplateS
     let backend_template = |backend: Backend| match backend {
         Backend::Axum => Ok("web-axum"),
         Backend::Actix => Ok("web-actix"),
+        Backend::Rocket => Ok("web-rocket"),
         other => Err(Error::TemplateNotFound(format!(
             "web-{}",
             other.to_string().to_lowercase()
@@ -545,11 +546,19 @@ mod tests {
     }
 
     #[test]
+    fn rocket_backend_plans_a_single_root_step() {
+        let name = project_name("app");
+        let spec = backend_spec(Backend::Rocket, Deployment::Docker);
+        let plan = template_plan(&spec, &name).expect("plan");
+        assert_eq!(plan, vec![TemplateStep::root("web-rocket", &name)]);
+    }
+
+    #[test]
     fn unsupported_stack_is_template_not_found() {
         let name = project_name("app");
-        let err = template_plan(&backend_spec(Backend::Rocket, Deployment::Docker), &name)
-            .expect_err("no rocket template yet");
-        assert!(matches!(err, Error::TemplateNotFound(id) if id == "web-rocket"));
+        let err = template_plan(&backend_spec(Backend::Warp, Deployment::Docker), &name)
+            .expect_err("no warp template yet");
+        assert!(matches!(err, Error::TemplateNotFound(id) if id == "web-warp"));
     }
 
     #[test]
@@ -562,6 +571,10 @@ mod tests {
         let spec = fullstack_spec(Backend::Actix, Frontend::Tera);
         let plan = template_plan(&spec, &name).expect("plan");
         assert_eq!(plan, vec![TemplateStep::root("web-actix", &name)]);
+
+        let spec = fullstack_spec(Backend::Rocket, Frontend::Tera);
+        let plan = template_plan(&spec, &name).expect("plan");
+        assert_eq!(plan, vec![TemplateStep::root("web-rocket", &name)]);
     }
 
     #[test]
@@ -1158,6 +1171,279 @@ mod tests {
         assert!(main_rs.contains("context!"));
     }
 
+    // --- Rocket ---
+
+    #[test]
+    fn rocket_template_renders_the_rocket_config() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("web-rocket").expect("template");
+
+        render_test(
+            &template,
+            &backend_spec(Backend::Rocket, Deployment::Docker),
+            "super-app",
+            tmp.path(),
+        )
+        .expect("render");
+
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        assert!(cargo_toml.contains("rocket = \"0.5\""));
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("Hello from super-app!"));
+        // Rocket's own defaults are 127.0.0.1:8000; the generated app
+        // listens where every other backend rise emits does.
+        assert!(main_rs.contains("Ipv4Addr::UNSPECIFIED"));
+        assert!(main_rs.contains("port: 3000"));
+        // The rate limiting fairing is feature-gated.
+        assert!(!main_rs.contains("mod rate_limit;"));
+    }
+
+    #[test]
+    fn rocket_non_docker_deployment_excludes_dockerfile() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("web-rocket").expect("template");
+
+        render_test(
+            &template,
+            &backend_spec(Backend::Rocket, Deployment::SelfHosted),
+            "app",
+            tmp.path(),
+        )
+        .expect("render");
+
+        assert!(!tmp.path().join("Dockerfile").exists());
+        assert!(tmp.path().join("src/main.rs").exists());
+    }
+
+    #[test]
+    fn rocket_sqlx_pools_into_managed_state() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("web-rocket").expect("template");
+
+        render_test(
+            &template,
+            &backend_spec(Backend::Rocket, Deployment::Docker),
+            "app",
+            tmp.path(),
+        )
+        .expect("render");
+
+        assert!(tmp.path().join("src/db.rs").exists());
+        assert!(tmp.path().join(".env.example").exists());
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("mod db;"));
+        assert!(main_rs.contains("db::create_pool().await"));
+        assert!(main_rs.contains(".manage(db)"));
+    }
+
+    #[test]
+    fn rocket_diesel_wires_a_pool_and_libpq() {
+        let spec = backend_spec_full(
+            Backend::Rocket,
+            Database::Diesel,
+            Deployment::Docker,
+            vec![],
+            vec![],
+        );
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("web-rocket").expect("template");
+
+        render_test(&template, &spec, "app", tmp.path()).expect("render");
+
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        assert!(cargo_toml.contains("diesel"));
+        assert!(cargo_toml.contains("r2d2"));
+        assert!(!cargo_toml.contains("sqlx"));
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("db::create_pool();"));
+        // Diesel is blocking: the generated module points at rocket's
+        // spawn_blocking, not at axum/actix wrappers.
+        let db_rs = fs::read_to_string(tmp.path().join("src/db.rs")).expect("read");
+        assert!(db_rs.contains("rocket::tokio::task::spawn_blocking"));
+        let dockerfile = fs::read_to_string(tmp.path().join("Dockerfile")).expect("read");
+        assert!(dockerfile.contains("libpq"));
+    }
+
+    #[test]
+    fn rocket_sled_opens_an_embedded_store() {
+        let spec = backend_spec_full(
+            Backend::Rocket,
+            Database::Sled,
+            Deployment::SelfHosted,
+            vec![],
+            vec![],
+        );
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("web-rocket").expect("template");
+
+        render_test(&template, &spec, "app", tmp.path()).expect("render");
+
+        let env_example = fs::read_to_string(tmp.path().join(".env.example")).expect("read");
+        assert!(env_example.contains("DB_PATH"));
+        let gitignore = fs::read_to_string(tmp.path().join(".gitignore")).expect("read");
+        assert!(gitignore.contains("/data"));
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("db::open()"));
+    }
+
+    #[test]
+    fn rocket_api_testing_uses_the_local_client_without_dev_dependencies() {
+        let spec = backend_spec_full(
+            Backend::Rocket,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![Testing::Api],
+            vec![],
+        );
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("web-rocket").expect("template");
+
+        render_test(&template, &spec, "app", tmp.path()).expect("render");
+
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("rocket::local::blocking::Client"));
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        assert!(!cargo_toml.contains("[dev-dependencies]"));
+    }
+
+    #[test]
+    fn rocket_websockets_add_a_rocket_ws_endpoint() {
+        let spec = backend_spec_full(
+            Backend::Rocket,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![],
+            vec![Feature::WebSockets],
+        );
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("web-rocket").expect("template");
+
+        render_test(&template, &spec, "app", tmp.path()).expect("render");
+
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        assert!(cargo_toml.contains("rocket_ws"));
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("routes![ws_echo]"));
+        assert!(main_rs.contains("ws.channel"));
+    }
+
+    #[test]
+    fn rocket_rate_limiting_adds_a_fairing() {
+        let spec = backend_spec_full(
+            Backend::Rocket,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![],
+            vec![Feature::RateLimiting],
+        );
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("web-rocket").expect("template");
+
+        render_test(&template, &spec, "app", tmp.path()).expect("render");
+
+        assert!(tmp.path().join("src/rate_limit.rs").exists());
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        // No canonical rocket rate limiter exists: the fairing ships with
+        // the project instead of adding a dependency.
+        assert!(!cargo_toml.contains("governor"));
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("mod rate_limit;"));
+        assert!(main_rs.contains("rate_limit::RateLimit::new()"));
+        let rate_limit = fs::read_to_string(tmp.path().join("src/rate_limit.rs")).expect("read");
+        assert!(rate_limit.contains("impl Fairing for RateLimit"));
+        assert!(rate_limit.contains("TooManyRequests"));
+    }
+
+    #[test]
+    fn rocket_graphql_adds_the_endpoints() {
+        let spec = backend_spec_full(
+            Backend::Rocket,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![],
+            vec![Feature::GraphQL],
+        );
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("web-rocket").expect("template");
+
+        render_test(&template, &spec, "app", tmp.path()).expect("render");
+
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        assert!(cargo_toml.contains("async-graphql-rocket"));
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("GraphQLQuery"));
+        assert!(main_rs.contains("routes![graphiql, graphql_query, graphql_request]"));
+        assert!(main_rs.contains(".manage(schema)"));
+        assert!(main_rs.contains(".data(db.clone())"));
+    }
+
+    #[test]
+    fn rocket_grpc_adds_the_tonic_trio() {
+        let spec = backend_spec_full(
+            Backend::Rocket,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![],
+            vec![Feature::gRPC],
+        );
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template = Template::embedded("web-rocket").expect("template");
+
+        render_test(&template, &spec, "app", tmp.path()).expect("render");
+
+        assert!(tmp.path().join("proto/hello.proto").exists());
+        assert!(tmp.path().join("build.rs").exists());
+        assert!(tmp.path().join("src/grpc.rs").exists());
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        assert!(cargo_toml.contains("tonic"));
+        // The gRPC server is spawned from main, which already runs inside
+        // rocket's tokio runtime — no direct tokio dependency.
+        assert!(!cargo_toml.contains("tokio = "));
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("grpc::serve()"));
+        assert!(main_rs.contains("rocket::tokio::spawn"));
+        let dockerfile = fs::read_to_string(tmp.path().join("Dockerfile")).expect("read");
+        assert!(dockerfile.contains("protobuf-compiler"));
+        assert!(dockerfile.contains("EXPOSE 50051"));
+    }
+
+    #[test]
+    fn rocket_fullstack_with_a_template_engine_embeds_templates() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let spec = fullstack_spec(Backend::Rocket, Frontend::Tera);
+        let template = Template::embedded("web-rocket").expect("template");
+
+        render_test(&template, &spec, "app", tmp.path()).expect("render");
+
+        let cargo_toml = fs::read_to_string(tmp.path().join("Cargo.toml")).expect("read");
+        assert!(cargo_toml.contains("tera"));
+        assert!(tmp.path().join("templates/index.html").exists());
+        assert!(!tmp.path().join("templates/index.hbs").exists());
+        let main_rs = fs::read_to_string(tmp.path().join("src/main.rs")).expect("read");
+        assert!(main_rs.contains("TEMPLATES"));
+        assert!(main_rs.contains("RawHtml"));
+    }
+
+    #[test]
+    fn rocket_yew_fullstack_serves_the_bundle_with_an_spa_fallback() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let name = project_name("app");
+        let spec = fullstack_spec(Backend::Rocket, Frontend::Yew);
+        let plan = template_plan(&spec, &name).expect("plan");
+
+        render_plan(&plan, &spec, &name, tmp.path()).expect("render");
+
+        let main_rs = fs::read_to_string(tmp.path().join("backend/src/main.rs")).expect("read");
+        assert!(main_rs.contains("/api/hello"));
+        assert!(main_rs.contains("FileServer::from(\"frontend/dist\")"));
+        assert!(main_rs.contains("spa_fallback"));
+        let cargo_toml = fs::read_to_string(tmp.path().join("backend/Cargo.toml")).expect("read");
+        assert!(cargo_toml.contains("rocket"));
+        // The workspace root ships the Dockerfile.
+        assert!(!tmp.path().join("backend/Dockerfile").exists());
+        assert!(tmp.path().join("Dockerfile").exists());
+    }
+
     // --- Output snapshots ---
     //
     // The whole generated tree as one deterministic string, snapshotted with
@@ -1348,6 +1634,99 @@ mod tests {
             Deployment::Docker,
             vec![],
             vec![],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_rocket_docker() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec(
+            Backend::Rocket,
+            Deployment::Docker
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_rocket_self_hosted() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec(
+            Backend::Rocket,
+            Deployment::SelfHosted
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_rocket_all_options() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Rocket,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![Testing::Api, Testing::SQLx],
+            vec![Feature::WebSockets],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_rocket_diesel() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Rocket,
+            Database::Diesel,
+            Deployment::SelfHosted,
+            vec![],
+            vec![],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_rocket_sea_orm() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Rocket,
+            Database::SeaORM,
+            Deployment::Docker,
+            vec![],
+            vec![],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_rocket_sled() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Rocket,
+            Database::Sled,
+            Deployment::SelfHosted,
+            vec![],
+            vec![],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_rocket_rate_limiting() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Rocket,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![],
+            vec![Feature::RateLimiting],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_rocket_graphql() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Rocket,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![],
+            vec![Feature::GraphQL],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_rocket_grpc() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Rocket,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![],
+            vec![Feature::gRPC],
         )));
     }
 
@@ -1675,6 +2054,46 @@ mod tests {
     fn snapshot_web_actix_fullstack_yew_api_testing() {
         insta::assert_snapshot!(snapshot_output(&fullstack_spec_tested(
             Backend::Actix,
+            Frontend::Yew
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_rocket_fullstack_askama() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec(
+            Backend::Rocket,
+            Frontend::Askama
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_rocket_fullstack_minijinja() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec(
+            Backend::Rocket,
+            Frontend::Minijinja
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_rocket_fullstack_handlebars() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec(
+            Backend::Rocket,
+            Frontend::Handlebars
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_rocket_fullstack_yew() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec(
+            Backend::Rocket,
+            Frontend::Yew
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_rocket_fullstack_yew_api_testing() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_tested(
+            Backend::Rocket,
             Frontend::Yew
         )));
     }

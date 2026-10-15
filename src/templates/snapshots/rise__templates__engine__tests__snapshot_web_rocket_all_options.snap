@@ -1,0 +1,139 @@
+---
+source: src/templates/engine.rs
+expression: "snapshot_output(&backend_spec_full(Backend::Rocket, Database::SQLx,\nDeployment::Docker, vec![Testing::Api, Testing::SQLx],\nvec![Feature::WebSockets],))"
+---
+=== .dockerignore ===
+# Keep the build context small and secrets out of image layers.
+.git
+/target
+.env
+
+=== .env.example ===
+DATABASE_URL=postgres://postgres:postgres@localhost/sample_app
+
+=== .gitignore ===
+/target
+.env
+
+=== Cargo.toml ===
+[package]
+name = "sample-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rocket = "0.5"
+# Loads .env (DATABASE_URL & co.) into the environment at startup.
+dotenvy = "0.15"
+rocket_ws = "0.1"
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }
+
+=== Dockerfile ===
+FROM rust:1-slim AS builder
+WORKDIR /app
+COPY . .
+RUN cargo build --release
+
+FROM debian:bookworm-slim
+COPY --from=builder /app/target/release/sample-app /usr/local/bin/app
+EXPOSE 3000
+CMD ["app"]
+
+=== src/db.rs ===
+//! Database connection pool (sqlx + Postgres).
+
+use sqlx::{PgPool, postgres::PgPoolOptions};
+
+/// Build a connection pool from the `DATABASE_URL` environment variable.
+///
+/// Copy `.env.example` to `.env` and adjust the URL for your database.
+/// Queries use sqlx's runtime-checked API, so the project compiles without
+/// a live database; `DATABASE_URL` is only needed at run time.
+pub async fn create_pool() -> Result<PgPool, sqlx::Error> {
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&database_url)
+        .await
+}
+=== src/main.rs ===
+use rocket::routes;
+use rocket::futures::{SinkExt, StreamExt};
+use rocket_ws::{Channel, WebSocket};
+
+mod db;
+
+#[rocket::main]
+async fn main() -> Result<(), rocket::Error> {
+    // Loads .env when present (DATABASE_URL & co.); absent is fine.
+    let _ = dotenvy::dotenv();
+    let db = db::create_pool().await.expect("failed to connect to database");
+    // Listen on 0.0.0.0:3000 like every other backend rise generates;
+    // rocket's own defaults are 127.0.0.1:8000.
+    let config = rocket::Config {
+        address: std::net::Ipv4Addr::UNSPECIFIED.into(),
+        port: 3000,
+        ..Default::default()
+    };
+    let rocket = rocket::custom(config)
+        .manage(db)
+        .mount("/", routes![root]);
+    let rocket = rocket.mount("/", routes![ws_echo]);
+
+    println!("listening on http://localhost:3000");
+    rocket.launch().await?;
+    Ok(())
+}
+
+#[rocket::get("/")]
+fn root() -> &'static str {
+    "Hello from sample-app!"
+}
+
+/// WebSocket echo endpoint: sends every message back.
+#[rocket::get("/ws")]
+fn ws_echo(ws: WebSocket) -> Channel<'static> {
+    ws.channel(|mut stream| {
+        Box::pin(async move {
+            while let Some(message) = stream.next().await {
+                stream.send(message?).await?;
+            }
+            Ok(())
+        })
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rocket::local::blocking::Client;
+
+    #[test]
+    fn root_says_hello() {
+        let rocket = rocket::build().mount("/", routes![root]);
+        let path = "/";
+        let client = Client::tracked(rocket).expect("valid rocket");
+        let response = client.get(path).dispatch();
+        assert_eq!(response.status(), rocket::http::Status::Ok);
+    }
+}
+
+#[cfg(test)]
+mod db_tests {
+    #[test]
+    #[ignore = "needs a running Postgres (set DATABASE_URL)"]
+    fn pool_connects() {
+        // rocket's own tokio runtime, so the generated project needs no
+        // direct tokio dependency.
+        rocket::tokio::runtime::Runtime::new()
+            .expect("tokio runtime")
+            .block_on(async {
+                let pool = crate::db::create_pool().await.expect("connect");
+                let row: (i64,) = sqlx::query_as("SELECT 1")
+                    .fetch_one(&pool)
+                    .await
+                    .expect("query");
+                assert_eq!(row.0, 1);
+            });
+    }
+}

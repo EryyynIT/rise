@@ -1,0 +1,206 @@
+---
+source: src/templates/engine.rs
+expression: "snapshot_output(&backend_spec_full(Backend::Rocket, Database::SQLx,\nDeployment::Docker, vec![], vec![Feature::RateLimiting],))"
+---
+=== .dockerignore ===
+# Keep the build context small and secrets out of image layers.
+.git
+/target
+.env
+
+=== .env.example ===
+DATABASE_URL=postgres://postgres:postgres@localhost/sample_app
+
+=== .gitignore ===
+/target
+.env
+
+=== Cargo.toml ===
+[package]
+name = "sample-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rocket = "0.5"
+# Loads .env (DATABASE_URL & co.) into the environment at startup.
+dotenvy = "0.15"
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }
+
+=== Dockerfile ===
+FROM rust:1-slim AS builder
+WORKDIR /app
+COPY . .
+RUN cargo build --release
+
+FROM debian:bookworm-slim
+COPY --from=builder /app/target/release/sample-app /usr/local/bin/app
+EXPOSE 3000
+CMD ["app"]
+
+=== src/db.rs ===
+//! Database connection pool (sqlx + Postgres).
+
+use sqlx::{PgPool, postgres::PgPoolOptions};
+
+/// Build a connection pool from the `DATABASE_URL` environment variable.
+///
+/// Copy `.env.example` to `.env` and adjust the URL for your database.
+/// Queries use sqlx's runtime-checked API, so the project compiles without
+/// a live database; `DATABASE_URL` is only needed at run time.
+pub async fn create_pool() -> Result<PgPool, sqlx::Error> {
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&database_url)
+        .await
+}
+=== src/main.rs ===
+use rocket::routes;
+
+mod db;
+mod rate_limit;
+
+#[rocket::main]
+async fn main() -> Result<(), rocket::Error> {
+    // Loads .env when present (DATABASE_URL & co.); absent is fine.
+    let _ = dotenvy::dotenv();
+    let db = db::create_pool().await.expect("failed to connect to database");
+    // Listen on 0.0.0.0:3000 like every other backend rise generates;
+    // rocket's own defaults are 127.0.0.1:8000.
+    let config = rocket::Config {
+        address: std::net::Ipv4Addr::UNSPECIFIED.into(),
+        port: 3000,
+        ..Default::default()
+    };
+    let rocket = rocket::custom(config)
+        .manage(db)
+        .mount("/", routes![root]);
+    let rocket = rocket.attach(rate_limit::RateLimit::new());
+
+    println!("listening on http://localhost:3000");
+    rocket.launch().await?;
+    Ok(())
+}
+
+#[rocket::get("/")]
+fn root() -> &'static str {
+    "Hello from sample-app!"
+}
+=== src/rate_limit.rs ===
+//! Per-IP rate limiting as a rocket fairing.
+//!
+//! In-memory token buckets — no external service needed. Each client IP
+//! gets bursts of up to 5 requests, then one request every 2 seconds on
+//! average; excess requests are answered `429 Too Many Requests`.
+
+use std::collections::HashMap;
+use std::net::IpAddr;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+use rocket::fairing::{Fairing, Info, Kind};
+use rocket::http::Status;
+use rocket::{Data, Request, Response};
+
+/// How long one token takes to refill.
+const REFILL_INTERVAL: Duration = Duration::from_secs(2);
+/// Bucket capacity — the largest burst a client may send.
+const CAPACITY: f64 = 5.0;
+/// Buckets idle this long are dropped by the cleanup thread.
+const IDLE_TIMEOUT: Duration = Duration::from_secs(600);
+
+/// The fairing; attach it with `.attach(RateLimit::new())`.
+pub struct RateLimit {
+    buckets: Arc<Mutex<HashMap<IpAddr, Bucket>>>,
+}
+
+impl RateLimit {
+    /// Create the fairing and spawn the background thread evicting stale
+    /// buckets — without it the map grows with every new client IP.
+    pub fn new() -> Self {
+        let buckets: Arc<Mutex<HashMap<IpAddr, Bucket>>> = Arc::new(Mutex::new(HashMap::new()));
+        let cleanup = Arc::clone(&buckets);
+        std::thread::spawn(move || {
+            loop {
+                std::thread::sleep(Duration::from_secs(60));
+                cleanup
+                    .lock()
+                    .unwrap_or_else(|err| err.into_inner())
+                    .retain(|_, bucket| bucket.touched.elapsed() < IDLE_TIMEOUT);
+            }
+        });
+        Self { buckets }
+    }
+}
+
+impl Default for RateLimit {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// One client's token bucket.
+struct Bucket {
+    tokens: f64,
+    touched: Instant,
+}
+
+impl Bucket {
+    fn full() -> Self {
+        Self {
+            tokens: CAPACITY,
+            touched: Instant::now(),
+        }
+    }
+
+    /// Refill for the elapsed time, then take one token; `false` when the
+    /// bucket is empty.
+    fn take(&mut self) -> bool {
+        let refill = self.touched.elapsed().as_secs_f64() / REFILL_INTERVAL.as_secs_f64();
+        self.tokens = (self.tokens + refill).min(CAPACITY);
+        self.touched = Instant::now();
+        if self.tokens >= 1.0 {
+            self.tokens -= 1.0;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+/// Marks a rejected request in the request-local cache; the response half
+/// of the fairing turns the mark into a `429`.
+#[derive(Clone)]
+struct Rejected(bool);
+
+#[rocket::async_trait]
+impl Fairing for RateLimit {
+    fn info(&self) -> Info {
+        Info {
+            name: "Per-IP rate limiting",
+            kind: Kind::Request | Kind::Response,
+        }
+    }
+
+    async fn on_request(&self, request: &mut Request<'_>, _: &mut Data<'_>) {
+        let Some(ip) = request.client_ip() else {
+            return;
+        };
+        let allowed = self
+            .buckets
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .entry(ip)
+            .or_insert_with(Bucket::full)
+            .take();
+        request.local_cache(|| Rejected(!allowed));
+    }
+
+    async fn on_response<'r>(&self, request: &'r Request<'_>, response: &mut Response<'r>) {
+        if request.local_cache(|| Rejected(false)).0 {
+            response.set_status(Status::TooManyRequests);
+            response.set_sized_body(0, std::io::Cursor::new(""));
+        }
+    }
+}

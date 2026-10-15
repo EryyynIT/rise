@@ -1567,6 +1567,26 @@ mod tests {
         )));
     }
 
+    // Per-IP rate limiting wraps the whole leptos router (axum serves
+    // through into_make_service_with_connect_info; actix wraps Governor).
+    #[test]
+    fn snapshot_web_axum_fullstack_leptos_rate_limiting() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_featured(
+            Backend::Axum,
+            Frontend::Leptos,
+            vec![Feature::RateLimiting],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_fullstack_leptos_rate_limiting() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_featured(
+            Backend::Actix,
+            Frontend::Leptos,
+            vec![Feature::RateLimiting],
+        )));
+    }
+
     // The api test module switches routes under a WASM frontend.
     #[test]
     fn snapshot_web_axum_fullstack_yew_api_testing() {

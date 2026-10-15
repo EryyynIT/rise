@@ -1,0 +1,319 @@
+---
+source: src/templates/engine.rs
+expression: "snapshot_output(&fullstack_spec_featured(Backend::Axum, Frontend::Leptos,\nvec![Feature::RateLimiting],))"
+---
+=== .dockerignore ===
+# Keep the build context small: cargo-leptos output under target/ is
+# rebuilt inside the image.
+.git
+/target
+
+=== .env.example ===
+DATABASE_URL=postgres://postgres:postgres@localhost/sample_app
+
+=== .gitignore ===
+/target
+.env
+
+=== Cargo.toml ===
+[package]
+name = "sample-app"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+leptos = { version = "0.8" }
+leptos_meta = { version = "0.8" }
+leptos_router = { version = "0.8" }
+axum = { version = "0.8", optional = true }
+leptos_axum = { version = "0.8", optional = true }
+# "time" drives the rate limiter's periodic storage cleanup.
+tokio = { version = "1", features = ["rt-multi-thread", "time"], optional = true }
+# Loads .env (DATABASE_URL & co.) into the environment at startup.
+dotenvy = { version = "0.15", optional = true }
+tower_governor = { version = "0.8", optional = true }
+console_error_panic_hook = { version = "0.1", optional = true }
+wasm-bindgen = { version = "0.2", optional = true }
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"], optional = true }
+
+[features]
+hydrate = ["leptos/hydrate", "dep:console_error_panic_hook", "dep:wasm-bindgen"]
+ssr = [
+    "dep:axum",
+    "dep:tokio",
+    "dep:leptos_axum",
+    "dep:dotenvy",
+    "dep:tower_governor",
+    "dep:sqlx",
+    "leptos/ssr",
+    "leptos_meta/ssr",
+    "leptos_router/ssr",
+]
+
+# Size-optimized profile for the WASM bundle in release mode.
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+
+# cargo-leptos reads this section; every key can be overridden by a
+# LEPTOS_* environment variable (see the Dockerfile).
+[package.metadata.leptos]
+# Name of the JS/WASM/CSS bundle. Defaults to the crate name.
+output-name = "sample-app"
+# All cargo-leptos output lands here; the server reads files from it.
+site-root = "target/site"
+# The site-root-relative folder the compiled JS/WASM/CSS is written to.
+site-pkg-dir = "pkg"
+# Plain CSS (a .scss file would be compiled with dart-sass instead).
+style-file = "style/main.css"
+# Address the server binds to.
+site-addr = "127.0.0.1:3000"
+# WebSocket port for automatic reload in DEV.
+reload-port = 3001
+env = "DEV"
+# The binary is built for the server, the library for the browser.
+bin-features = ["ssr"]
+bin-default-features = false
+lib-features = ["hydrate"]
+lib-default-features = false
+lib-profile-release = "wasm-release"
+
+=== Dockerfile ===
+# Build the SSR binary and the WASM bundle with cargo-leptos.
+FROM rust:1-slim AS builder
+RUN cargo install --locked cargo-leptos && rustup target add wasm32-unknown-unknown
+WORKDIR /app
+COPY . .
+RUN cargo leptos build --release
+
+FROM debian:bookworm-slim
+WORKDIR /app
+COPY --from=builder /app/target/release/sample-app /usr/local/bin/server
+COPY --from=builder /app/target/site /app/site
+# The runtime image has no Cargo.toml, so the leptos configuration comes
+# from environment variables (they override [package.metadata.leptos]).
+ENV LEPTOS_ENV=PROD \
+    LEPTOS_SITE_ADDR=0.0.0.0:3000 \
+    LEPTOS_SITE_ROOT=/app/site
+EXPOSE 3000
+CMD ["server"]
+
+=== src/app.rs ===
+use leptos::prelude::*;
+use leptos_meta::{MetaTags, Stylesheet, Title, provide_meta_context};
+use leptos_router::{
+    StaticSegment,
+    components::{Route, Router, Routes},
+};
+
+/// The HTML shell every page is rendered into.
+pub fn shell(options: LeptosOptions) -> impl IntoView {
+    view! {
+        <!DOCTYPE html>
+        <html lang="en">
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <AutoReload options=options.clone() />
+                <HydrationScripts options/>
+                <MetaTags/>
+            </head>
+            <body>
+                <App/>
+            </body>
+        </html>
+    }
+}
+
+#[component]
+pub fn App() -> impl IntoView {
+    // Provides context that manages stylesheets, titles, meta tags, etc.
+    provide_meta_context();
+
+    view! {
+        // injects a stylesheet into the document <head>
+        // id=leptos means cargo-leptos will hot-reload this stylesheet
+        <Stylesheet id="leptos" href="/pkg/sample-app.css"/>
+
+        // sets the document title
+        <Title text="Welcome to Leptos"/>
+
+        // content for this welcome page
+        <Router>
+            <main>
+                <Routes fallback=|| "Page not found.".into_view()>
+                    <Route path=StaticSegment("") view=HomePage/>
+                </Routes>
+            </main>
+        </Router>
+    }
+}
+
+/// Renders the home page of your application.
+#[component]
+fn HomePage() -> impl IntoView {
+    // Creates a reactive value to update the button
+    let count = RwSignal::new(0);
+    let on_click = move |_| *count.write() += 1;
+    // Runs on the server during SSR and streams the result to the client.
+    let status = OnceResource::new(database_status());
+
+    view! {
+        <h1>"Welcome to Leptos!"</h1>
+        <button on:click=on_click>"Click Me: " {count}</button>
+        <Suspense fallback=|| view! { <p>"Checking the database…"</p> }>
+            {move || {
+                status.get().map(|result| {
+                    view! { <p>"Database: " {result.unwrap_or_else(|e| e.to_string())}</p> }
+                })
+            }}
+        </Suspense>
+    }
+}
+
+/// Example server function: proves the database wiring works. The
+/// connection is provided through the request context (created in
+/// `main.rs`, see `src/db.rs` for the type) — replace the query with
+/// your own.
+#[server]
+pub async fn database_status() -> Result<String, ServerFnError> {
+    let pool = use_context::<sqlx::PgPool>()
+        .ok_or_else(|| ServerFnError::new("database pool missing from the request context"))?;
+    // Runtime-checked query: the project compiles without a live database.
+    sqlx::query_scalar::<_, String>("SELECT 'connected'::text")
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(format!("database query failed: {e}")))
+}
+
+=== src/db.rs ===
+//! Database connection pool (sqlx + Postgres).
+
+use sqlx::{PgPool, postgres::PgPoolOptions};
+
+/// Build a connection pool from the `DATABASE_URL` environment variable.
+///
+/// Copy `.env.example` to `.env` and adjust the URL for your database.
+/// Queries use sqlx's runtime-checked API, so the project compiles without
+/// a live database; `DATABASE_URL` is only needed at run time.
+pub async fn create_pool() -> Result<PgPool, sqlx::Error> {
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&database_url)
+        .await
+}
+
+=== src/lib.rs ===
+pub mod app;
+#[cfg(feature = "ssr")]
+pub mod db;
+
+#[cfg(feature = "hydrate")]
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn hydrate() {
+    use crate::app::*;
+    console_error_panic_hook::set_once();
+    leptos::mount::hydrate_body(App);
+}
+
+=== src/main.rs ===
+#[cfg(feature = "ssr")]
+#[tokio::main]
+async fn main() {
+    use axum::Router;
+    use std::net::SocketAddr;
+    use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
+    use leptos::logging::log;
+    use leptos::prelude::*;
+    use leptos_axum::{LeptosRoutes, generate_route_list};
+    use sample_app::app::*;
+    use sample_app::db;
+
+    // Loads .env when present (DATABASE_URL & co.); absent is fine.
+    let _ = dotenvy::dotenv();
+
+    let conf = get_configuration(None).expect("failed to load leptos configuration");
+    let addr = conf.leptos_options.site_addr;
+    let leptos_options = conf.leptos_options;
+    // Generate the list of routes in your Leptos app.
+    let routes = generate_route_list(App);
+    let db = db::create_pool().await.expect("failed to connect to database");
+
+    let app = Router::new()
+        // The database handle is provided through the request context:
+        // server functions and SSR handlers read it with `use_context`
+        // (see `database_status` in app.rs).
+        .leptos_routes_with_context(
+            &leptos_options,
+            routes,
+            move || provide_context(db.clone()),
+            {
+                let leptos_options = leptos_options.clone();
+                move || shell(leptos_options.clone())
+            },
+        )
+        .fallback(leptos_axum::file_and_error_handler(shell))
+        .with_state(leptos_options);
+
+    // Rate limit requests per client IP: bursts of up to 5 requests,
+    // then one request every 2 seconds on average.
+    let governor_conf = GovernorConfigBuilder::default()
+        .per_second(2)
+        .burst_size(5)
+        .finish()
+        .expect("valid rate limiter configuration");
+    // Governor's storage grows unboundedly without periodic cleanup.
+    let limiter = governor_conf.limiter().clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            limiter.retain_recent();
+        }
+    });
+    let app = app.layer(GovernorLayer::new(governor_conf));
+
+    log!("listening on http://{}", &addr);
+    let listener = tokio::net::TcpListener::bind(&addr)
+        .await
+        .expect("failed to bind");
+    // The per-IP rate limiter needs the peer address of each connection.
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
+        .await
+        .expect("failed to serve");
+}
+
+#[cfg(not(feature = "ssr"))]
+pub fn main() {
+    // No client-side main: the browser entry point is `hydrate` in lib.rs.
+}
+
+=== style/main.css ===
+body {
+    font-family: system-ui, sans-serif;
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    text-align: center;
+}
+
+button {
+    font-size: 1.25rem;
+    padding: 0.5rem 1rem;
+    border: 2px solid #b7410e;
+    border-radius: 0.5rem;
+    background: transparent;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #b7410e;
+    color: white;
+}

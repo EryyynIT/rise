@@ -944,6 +944,42 @@ fn leptos_fullstack_renders_web_sockets() {
 }
 
 #[test]
+fn leptos_fullstack_renders_rate_limiting() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "leptos-app",
+            "--backend",
+            "axum",
+            "--frontend",
+            "leptos",
+            "--db",
+            "sqlx",
+            "--features",
+            "rate-limiting",
+            "--deployment",
+            "self-hosted",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let project = tmp.path().join("leptos-app");
+    let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read Cargo.toml");
+    assert!(cargo_toml.contains("tower_governor"));
+    assert!(cargo_toml.contains("\"dep:tower_governor\""));
+    // The limiter's cleanup task drives the tokio "time" feature.
+    assert!(cargo_toml.contains("\"rt-multi-thread\", \"time\""));
+    let main_rs = std::fs::read_to_string(project.join("src/main.rs")).expect("read main.rs");
+    assert!(main_rs.contains("GovernorLayer"));
+    // The per-IP key extractor needs the peer address at connection level.
+    assert!(main_rs.contains("into_make_service_with_connect_info::<SocketAddr>()"));
+}
+
+#[test]
 fn new_with_template_dir_uses_the_custom_template() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let template_dir = tmp.path().join("custom-template");

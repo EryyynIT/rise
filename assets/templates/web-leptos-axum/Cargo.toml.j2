@@ -16,9 +16,17 @@ axum = { version = "0.8", features = ["ws"], optional = true }
 axum = { version = "0.8", optional = true }
 {%- endif %}
 leptos_axum = { version = "0.8", optional = true }
+{%- if 'rate-limiting' in backend.features %}
+# "time" drives the rate limiter's periodic storage cleanup.
+tokio = { version = "1", features = ["rt-multi-thread", "time"], optional = true }
+{%- else %}
 tokio = { version = "1", features = ["rt-multi-thread"], optional = true }
+{%- endif %}
 # Loads .env (DATABASE_URL & co.) into the environment at startup.
 dotenvy = { version = "0.15", optional = true }
+{%- if 'rate-limiting' in backend.features %}
+tower_governor = { version = "0.8", optional = true }
+{%- endif %}
 console_error_panic_hook = { version = "0.1", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 {%- if backend.database == 'sqlx' %}
@@ -38,6 +46,9 @@ ssr = [
     "dep:tokio",
     "dep:leptos_axum",
     "dep:dotenvy",
+    {%- if 'rate-limiting' in backend.features %}
+    "dep:tower_governor",
+    {%- endif %}
     {%- if backend.database == 'sqlx' %}
     "dep:sqlx",
     {%- elif backend.database == 'diesel' %}

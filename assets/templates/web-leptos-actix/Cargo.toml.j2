@@ -12,6 +12,9 @@ actix-web = { version = "4", features = ["macros"], optional = true }
 {%- if 'web-sockets' in backend.features %}
 actix-ws = { version = "0.3", optional = true }
 {%- endif %}
+{%- if 'rate-limiting' in backend.features %}
+actix-governor = { version = "0.10", optional = true }
+{%- endif %}
 leptos = { version = "0.8" }
 leptos_meta = { version = "0.8" }
 leptos_actix = { version = "0.8", optional = true }
@@ -37,6 +40,9 @@ ssr = [
     "dep:actix-web",
     {%- if 'web-sockets' in backend.features %}
     "dep:actix-ws",
+    {%- endif %}
+    {%- if 'rate-limiting' in backend.features %}
+    "dep:actix-governor",
     {%- endif %}
     "dep:leptos_actix",
     "dep:dotenvy",

@@ -12,6 +12,10 @@ async fn main() {
 {%- if 'web-sockets' in backend.features %}
     use axum::routing::get;
 {%- endif %}
+{%- if 'rate-limiting' in backend.features %}
+    use std::net::SocketAddr;
+    use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
+{%- endif %}
     use leptos::logging::log;
     use leptos::prelude::*;
     use leptos_axum::{LeptosRoutes, generate_route_list};
@@ -56,14 +60,40 @@ async fn main() {
         )
         .fallback(leptos_axum::file_and_error_handler(shell))
         .with_state(leptos_options);
+{%- if 'rate-limiting' in backend.features %}
+
+    // Rate limit requests per client IP: bursts of up to 5 requests,
+    // then one request every 2 seconds on average.
+    let governor_conf = GovernorConfigBuilder::default()
+        .per_second(2)
+        .burst_size(5)
+        .finish()
+        .expect("valid rate limiter configuration");
+    // Governor's storage grows unboundedly without periodic cleanup.
+    let limiter = governor_conf.limiter().clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            limiter.retain_recent();
+        }
+    });
+    let app = app.layer(GovernorLayer::new(governor_conf));
+{%- endif %}
 
     log!("listening on http://{}", &addr);
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
         .expect("failed to bind");
+{%- if 'rate-limiting' in backend.features %}
+    // The per-IP rate limiter needs the peer address of each connection.
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
+        .await
+        .expect("failed to serve");
+{%- else %}
     axum::serve(listener, app.into_make_service())
         .await
         .expect("failed to serve");
+{%- endif %}
 }
 
 #[cfg(not(feature = "ssr"))]

@@ -3,6 +3,9 @@
 async fn main() -> std::io::Result<()> {
     use actix_files::Files;
     use actix_web::{App, HttpServer};
+{%- if 'rate-limiting' in backend.features %}
+    use actix_governor::{Governor, GovernorConfigBuilder};
+{%- endif %}
     use leptos::config::get_configuration;
     use leptos::prelude::*;
     use leptos_actix::{LeptosRoutes, generate_route_list};
@@ -15,6 +18,15 @@ async fn main() -> std::io::Result<()> {
 
     let conf = get_configuration(None).expect("failed to load leptos configuration");
     let addr = conf.leptos_options.site_addr;
+{%- if 'rate-limiting' in backend.features %}
+    // Rate limit requests per client IP: bursts of up to 5 requests,
+    // then two requests per second on average.
+    let governor_conf = GovernorConfigBuilder::default()
+        .requests_per_second(2)
+        .burst_size(5)
+        .finish()
+        .expect("valid rate limiter configuration");
+{%- endif %}
 
 {%- if backend.database == 'sqlx' %}
     let db = db::create_pool().await.expect("failed to connect to database");
@@ -39,6 +51,9 @@ async fn main() -> std::io::Result<()> {
         println!("listening on http://{}", &addr);
 
         App::new()
+{%- if 'rate-limiting' in backend.features %}
+            .wrap(Governor::new(&governor_conf))
+{%- endif %}
             // Serve the compiled JS/WASM/CSS bundle.
             .service(Files::new("/pkg", format!("{site_root}/pkg")))
 {%- if 'web-sockets' in backend.features %}

@@ -243,7 +243,6 @@ async fn main() -> std::io::Result<()> {
     let conf = get_configuration(None).expect("failed to load leptos configuration");
     let addr = conf.leptos_options.site_addr;
     let db = db::create_pool().await.expect("failed to connect to database");
-
     HttpServer::new(move || {
         // Generate the list of routes in your Leptos app.
         let routes = generate_route_list(App);

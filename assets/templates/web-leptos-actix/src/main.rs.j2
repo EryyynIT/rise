@@ -7,6 +7,11 @@ use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema, http::Grap
 use async_graphql_actix_web::{GraphQLRequest, GraphQLResponse};
 
 {% endif -%}
+{%- if 'grpc' in backend.features %}
+#[cfg(feature = "ssr")]
+mod grpc;
+
+{% endif -%}
 #[cfg(feature = "ssr")]
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -50,6 +55,14 @@ async fn main() -> std::io::Result<()> {
     let db = db::open().expect("failed to open the database");
 {%- endif %}
 
+{%- if 'grpc' in backend.features %}
+    // The gRPC API runs on its own port, next to the HTTP server.
+    actix_web::rt::spawn(async {
+        if let Err(err) = grpc::serve().await {
+            eprintln!("gRPC server error: {err}");
+        }
+    });
+{%- endif %}
     HttpServer::new(move || {
         // Generate the list of routes in your Leptos app.
         let routes = generate_route_list(App);

@@ -31,6 +31,11 @@ tower_governor = { version = "0.8", optional = true }
 async-graphql = { version = "7", optional = true }
 async-graphql-axum = { version = "7", optional = true }
 {%- endif %}
+{%- if 'grpc' in backend.features %}
+tonic = { version = "0.14", optional = true }
+tonic-prost = { version = "0.14", optional = true }
+prost = { version = "0.14", optional = true }
+{%- endif %}
 console_error_panic_hook = { version = "0.1", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 {%- if backend.database == 'sqlx' %}
@@ -57,6 +62,11 @@ ssr = [
     "dep:async-graphql",
     "dep:async-graphql-axum",
     {%- endif %}
+    {%- if 'grpc' in backend.features %}
+    "dep:tonic",
+    "dep:tonic-prost",
+    "dep:prost",
+    {%- endif %}
     {%- if backend.database == 'sqlx' %}
     "dep:sqlx",
     {%- elif backend.database == 'diesel' %}
@@ -70,6 +80,12 @@ ssr = [
     "leptos_meta/ssr",
     "leptos_router/ssr",
 ]
+{%- if 'grpc' in backend.features %}
+
+# tonic-prost-build compiles proto/hello.proto with protoc at build time.
+[build-dependencies]
+tonic-prost-build = "0.14"
+{%- endif %}
 {%- if 'api' in backend.testing %}
 
 # tower's oneshot drives the server-function API test in main.rs.

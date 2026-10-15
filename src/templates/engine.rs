@@ -1608,6 +1608,26 @@ mod tests {
         )));
     }
 
+    // gRPC next to the leptos server: the tonic Greeter on 50051, the
+    // proto + build.rs trio, and protobuf-compiler in the Dockerfile.
+    #[test]
+    fn snapshot_web_axum_fullstack_leptos_grpc() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_featured(
+            Backend::Axum,
+            Frontend::Leptos,
+            vec![Feature::gRPC],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_fullstack_leptos_grpc() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_featured(
+            Backend::Actix,
+            Frontend::Leptos,
+            vec![Feature::gRPC],
+        )));
+    }
+
     // The api test module switches routes under a WASM frontend.
     #[test]
     fn snapshot_web_axum_fullstack_yew_api_testing() {

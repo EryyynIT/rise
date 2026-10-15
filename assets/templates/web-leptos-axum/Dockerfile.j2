@@ -4,6 +4,10 @@ FROM rust:1-slim AS builder
 # Diesel links against libpq.
 RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev && rm -rf /var/lib/apt/lists/*
 {%- endif %}
+{%- if 'grpc' in backend.features %}
+# tonic-prost-build compiles proto/hello.proto with protoc at build time.
+RUN apt-get update && apt-get install -y --no-install-recommends protobuf-compiler && rm -rf /var/lib/apt/lists/*
+{%- endif %}
 RUN cargo install --locked cargo-leptos && rustup target add wasm32-unknown-unknown
 WORKDIR /app
 COPY . .
@@ -22,4 +26,7 @@ ENV LEPTOS_ENV=PROD \
     LEPTOS_SITE_ADDR=0.0.0.0:3000 \
     LEPTOS_SITE_ROOT=/app/site
 EXPOSE 3000
+{%- if 'grpc' in backend.features %}
+EXPOSE 50051
+{%- endif %}
 CMD ["server"]

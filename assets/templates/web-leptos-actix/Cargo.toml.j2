@@ -19,6 +19,11 @@ actix-governor = { version = "0.10", optional = true }
 async-graphql = { version = "7", optional = true }
 async-graphql-actix-web = { version = "7", optional = true }
 {%- endif %}
+{%- if 'grpc' in backend.features %}
+tonic = { version = "0.14", optional = true }
+tonic-prost = { version = "0.14", optional = true }
+prost = { version = "0.14", optional = true }
+{%- endif %}
 leptos = { version = "0.8" }
 leptos_meta = { version = "0.8" }
 leptos_actix = { version = "0.8", optional = true }
@@ -52,6 +57,11 @@ ssr = [
     "dep:async-graphql",
     "dep:async-graphql-actix-web",
     {%- endif %}
+    {%- if 'grpc' in backend.features %}
+    "dep:tonic",
+    "dep:tonic-prost",
+    "dep:prost",
+    {%- endif %}
     "dep:leptos_actix",
     "dep:dotenvy",
     {%- if backend.database == 'sqlx' %}
@@ -67,6 +77,12 @@ ssr = [
     "leptos_meta/ssr",
     "leptos_router/ssr",
 ]
+{%- if 'grpc' in backend.features %}
+
+# tonic-prost-build compiles proto/hello.proto with protoc at build time.
+[build-dependencies]
+tonic-prost-build = "0.14"
+{%- endif %}
 
 # Size-optimized profile for the WASM bundle in release mode.
 [profile.wasm-release]

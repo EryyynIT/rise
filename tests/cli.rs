@@ -1014,6 +1014,47 @@ fn leptos_fullstack_renders_graphql() {
 }
 
 #[test]
+fn leptos_fullstack_renders_grpc() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "leptos-app",
+            "--backend",
+            "actix",
+            "--frontend",
+            "leptos",
+            "--db",
+            "sqlx",
+            "--features",
+            "grpc",
+            "--deployment",
+            "docker",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        // The protoc prerequisite hint is printed for leptos too.
+        .stdout(predicate::str::contains("protoc"))
+        .success();
+
+    let project = tmp.path().join("leptos-app");
+    for file in ["proto/hello.proto", "build.rs", "src/grpc.rs"] {
+        assert!(project.join(file).exists(), "{file} must exist");
+    }
+    let main_rs = std::fs::read_to_string(project.join("src/main.rs")).expect("read main.rs");
+    // The tonic server spawns next to the leptos server, ssr-gated.
+    assert!(main_rs.contains("mod grpc;"));
+    assert!(main_rs.contains("actix_web::rt::spawn"));
+    let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read Cargo.toml");
+    assert!(cargo_toml.contains("tonic-prost-build"));
+    let dockerfile = std::fs::read_to_string(project.join("Dockerfile")).expect("read Dockerfile");
+    assert!(dockerfile.contains("protobuf-compiler"));
+    assert!(dockerfile.contains("EXPOSE 50051"));
+}
+
+#[test]
 fn new_with_template_dir_uses_the_custom_template() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let template_dir = tmp.path().join("custom-template");

@@ -14,6 +14,11 @@ use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{Extension, response::Html};
 
 {% endif -%}
+{%- if 'grpc' in backend.features %}
+#[cfg(feature = "ssr")]
+mod grpc;
+
+{% endif -%}
 #[cfg(feature = "ssr")]
 #[tokio::main]
 async fn main() {
@@ -102,6 +107,14 @@ async fn main() {
 {%- endif %}
 
     log!("listening on http://{}", &addr);
+{%- if 'grpc' in backend.features %}
+    // The gRPC API runs on its own port, next to the HTTP server.
+    tokio::spawn(async {
+        if let Err(err) = grpc::serve().await {
+            eprintln!("gRPC server error: {err}");
+        }
+    });
+{%- endif %}
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
         .expect("failed to bind");

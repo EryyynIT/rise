@@ -253,7 +253,6 @@ async fn main() -> std::io::Result<()> {
         .finish()
         .expect("valid rate limiter configuration");
     let db = db::create_pool().await.expect("failed to connect to database");
-
     HttpServer::new(move || {
         // Generate the list of routes in your Leptos app.
         let routes = generate_route_list(App);

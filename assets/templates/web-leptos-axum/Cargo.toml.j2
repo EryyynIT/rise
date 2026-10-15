@@ -10,7 +10,11 @@ crate-type = ["cdylib", "rlib"]
 leptos = { version = "0.8" }
 leptos_meta = { version = "0.8" }
 leptos_router = { version = "0.8" }
+{%- if 'web-sockets' in backend.features %}
+axum = { version = "0.8", features = ["ws"], optional = true }
+{%- else %}
 axum = { version = "0.8", optional = true }
+{%- endif %}
 leptos_axum = { version = "0.8", optional = true }
 tokio = { version = "1", features = ["rt-multi-thread"], optional = true }
 # Loads .env (DATABASE_URL & co.) into the environment at startup.

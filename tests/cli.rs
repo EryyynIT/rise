@@ -910,6 +910,40 @@ fn leptos_fullstack_renders_testing_content() {
 }
 
 #[test]
+fn leptos_fullstack_renders_web_sockets() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "leptos-app",
+            "--backend",
+            "actix",
+            "--frontend",
+            "leptos",
+            "--db",
+            "sqlx",
+            "--features",
+            "web-sockets",
+            "--deployment",
+            "self-hosted",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let project = tmp.path().join("leptos-app");
+    let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read Cargo.toml");
+    assert!(cargo_toml.contains("actix-ws"));
+    assert!(cargo_toml.contains("\"dep:actix-ws\""));
+    let main_rs = std::fs::read_to_string(project.join("src/main.rs")).expect("read main.rs");
+    assert!(main_rs.contains(".service(ws)"));
+    // The endpoint is server-side only: gated on ssr, out of the WASM lib.
+    assert!(main_rs.contains("#[cfg(feature = \"ssr\")]\n#[actix_web::get(\"/ws\")]"));
+}
+
+#[test]
 fn new_with_template_dir_uses_the_custom_template() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let template_dir = tmp.path().join("custom-template");

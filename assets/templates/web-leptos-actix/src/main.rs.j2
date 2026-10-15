@@ -41,6 +41,10 @@ async fn main() -> std::io::Result<()> {
         App::new()
             // Serve the compiled JS/WASM/CSS bundle.
             .service(Files::new("/pkg", format!("{site_root}/pkg")))
+{%- if 'web-sockets' in backend.features %}
+            // WebSocket echo endpoint, next to the leptos routes.
+            .service(ws)
+{%- endif %}
             .leptos_routes_with_context(routes, move || provide_context(db.clone()), {
                 let leptos_options = leptos_options.clone();
                 move || {
@@ -72,6 +76,26 @@ async fn main() -> std::io::Result<()> {
 pub fn main() {
     // No client-side main: the browser entry point is `hydrate` in lib.rs.
 }
+{%- if 'web-sockets' in backend.features %}
+
+/// WebSocket echo endpoint: sends every text message back.
+#[cfg(feature = "ssr")]
+#[actix_web::get("/ws")]
+async fn ws(
+    req: actix_web::HttpRequest,
+    body: actix_web::web::Payload,
+) -> actix_web::Result<actix_web::HttpResponse> {
+    let (response, mut session, mut msg_stream) = actix_ws::handle(&req, body)?;
+    actix_web::rt::spawn(async move {
+        while let Some(Ok(actix_ws::Message::Text(text))) = msg_stream.recv().await {
+            if session.text(text).await.is_err() {
+                break;
+            }
+        }
+    });
+    Ok(response)
+}
+{%- endif %}
 {%- if 'api' in backend.testing %}
 
 #[cfg(all(test, feature = "ssr"))]

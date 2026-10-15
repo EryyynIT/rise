@@ -464,6 +464,23 @@ mod tests {
         fullstack_spec_full(backend, frontend, database, Deployment::Docker, vec![])
     }
 
+    fn fullstack_spec_featured(
+        backend: Backend,
+        frontend: Frontend,
+        features: Vec<Feature>,
+    ) -> ProjectSpec {
+        ProjectSpec::WebApp(WebAppSpec::Fullstack(FullstackSpec {
+            frontend,
+            backend: BackendSpec {
+                backend,
+                database: Database::SQLx,
+                deployment: Deployment::Docker,
+                testing: vec![],
+                features,
+            },
+        }))
+    }
+
     fn fullstack_spec_full(
         backend: Backend,
         frontend: Frontend,
@@ -1527,6 +1544,26 @@ mod tests {
             Database::Sled,
             Deployment::Docker,
             vec![Testing::Api],
+        )));
+    }
+
+    // The WebSocket echo endpoint sits next to the leptos routes on both
+    // backends (axum `ws` feature / actix-ws), gated on `ssr`.
+    #[test]
+    fn snapshot_web_axum_fullstack_leptos_web_sockets() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_featured(
+            Backend::Axum,
+            Frontend::Leptos,
+            vec![Feature::WebSockets],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_fullstack_leptos_web_sockets() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_featured(
+            Backend::Actix,
+            Frontend::Leptos,
+            vec![Feature::WebSockets],
         )));
     }
 

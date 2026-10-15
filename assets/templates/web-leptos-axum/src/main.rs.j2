@@ -1,7 +1,17 @@
+{%- if 'web-sockets' in backend.features %}
+#[cfg(feature = "ssr")]
+use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+#[cfg(feature = "ssr")]
+use axum::response::Response;
+
+{% endif -%}
 #[cfg(feature = "ssr")]
 #[tokio::main]
 async fn main() {
     use axum::Router;
+{%- if 'web-sockets' in backend.features %}
+    use axum::routing::get;
+{%- endif %}
     use leptos::logging::log;
     use leptos::prelude::*;
     use leptos_axum::{LeptosRoutes, generate_route_list};
@@ -28,6 +38,10 @@ async fn main() {
 {%- endif %}
 
     let app = Router::new()
+{%- if 'web-sockets' in backend.features %}
+        // WebSocket echo endpoint, next to the leptos routes.
+        .route("/ws", get(ws_handler))
+{%- endif %}
         // The database handle is provided through the request context:
         // server functions and SSR handlers read it with `use_context`
         // (see `database_status` in app.rs).
@@ -56,6 +70,23 @@ async fn main() {
 pub fn main() {
     // No client-side main: the browser entry point is `hydrate` in lib.rs.
 }
+{%- if 'web-sockets' in backend.features %}
+
+/// WebSocket echo endpoint: sends every text message back.
+#[cfg(feature = "ssr")]
+async fn ws_handler(ws: WebSocketUpgrade) -> Response {
+    ws.on_upgrade(handle_socket)
+}
+
+#[cfg(feature = "ssr")]
+async fn handle_socket(mut socket: WebSocket) {
+    while let Some(Ok(Message::Text(text))) = socket.recv().await {
+        if socket.send(Message::Text(text)).await.is_err() {
+            break;
+        }
+    }
+}
+{%- endif %}
 {%- if 'api' in backend.testing %}
 
 #[cfg(all(test, feature = "ssr"))]

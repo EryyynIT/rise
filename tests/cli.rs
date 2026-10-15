@@ -444,6 +444,31 @@ fn new_generates_game_project_without_prompts() {
 }
 
 #[test]
+fn new_generates_embedded_project_without_prompts() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args(["new", "blink", "--kind", "embedded", "--no-input"])
+        .current_dir(tmp.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("created ./blink"))
+        .stdout(predicate::str::contains("cargo run"));
+
+    let project = tmp.path().join("blink");
+    let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read Cargo.toml");
+    assert!(cargo_toml.contains("name = \"blink\""));
+    assert!(cargo_toml.contains("cortex-m-rt"));
+    let main_rs = std::fs::read_to_string(project.join("src/main.rs")).expect("read main.rs");
+    assert!(main_rs.contains("cortex_m_rt::entry"));
+    assert!(project.join(".cargo/config.toml").exists());
+    assert!(project.join("memory.x").exists());
+    assert!(project.join("build.rs").exists());
+    assert!(project.join(".git").exists(), "git init ran");
+}
+
+#[test]
 fn new_generates_yew_frontend_without_prompts() {
     let tmp = tempfile::tempdir().expect("tempdir");
 

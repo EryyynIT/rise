@@ -210,7 +210,7 @@ fn template_plan(spec: &ProjectSpec, name: &ProjectName) -> Result<Vec<TemplateS
         }
         ProjectSpec::CliApp => Ok(vec![TemplateStep::root("cli", name)]),
         ProjectSpec::Library => Ok(vec![TemplateStep::root("library", name)]),
-        ProjectSpec::Embedded => Err(Error::TemplateNotFound("embedded".into())),
+        ProjectSpec::Embedded => Ok(vec![TemplateStep::root("embedded-cortex-m", name)]),
         ProjectSpec::Game => Ok(vec![TemplateStep::root("game-macroquad", name)]),
     }
 }
@@ -538,15 +538,18 @@ mod tests {
     }
 
     #[test]
+    fn embedded_plans_the_cortex_m_template() {
+        let name = project_name("app");
+        let plan = template_plan(&ProjectSpec::Embedded, &name).expect("plan");
+        assert_eq!(plan, vec![TemplateStep::root("embedded-cortex-m", &name)]);
+    }
+
+    #[test]
     fn unsupported_stack_is_template_not_found() {
         let name = project_name("app");
         let err = template_plan(&backend_spec(Backend::Rocket, Deployment::Docker), &name)
             .expect_err("no rocket template yet");
         assert!(matches!(err, Error::TemplateNotFound(id) if id == "web-rocket"));
-
-        let err =
-            template_plan(&ProjectSpec::Embedded, &name).expect_err("no embedded template yet");
-        assert!(matches!(err, Error::TemplateNotFound(id) if id == "embedded"));
     }
 
     #[test]
@@ -1393,6 +1396,11 @@ mod tests {
     #[test]
     fn snapshot_game() {
         insta::assert_snapshot!(snapshot_output(&ProjectSpec::Game));
+    }
+
+    #[test]
+    fn snapshot_embedded_cortex_m() {
+        insta::assert_snapshot!(snapshot_output(&ProjectSpec::Embedded));
     }
 
     #[test]

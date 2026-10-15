@@ -290,6 +290,7 @@ Dockerfile = "spec.WebApp.Backend.deployment != 'docker'"
             names,
             [
                 "cli",
+                "embedded-cortex-m",
                 "frontend-leptos",
                 "frontend-yew",
                 "game-macroquad",

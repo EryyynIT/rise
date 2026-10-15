@@ -1,0 +1,2 @@
+name = "embedded-cortex-m"
+description = "Bare-metal ARM Cortex-M firmware: cortex-m-rt + defmt logging, flashed with probe-rs"

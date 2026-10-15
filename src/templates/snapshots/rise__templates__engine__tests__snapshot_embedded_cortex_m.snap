@@ -1,0 +1,90 @@
+---
+source: src/templates/engine.rs
+expression: "snapshot_output(&ProjectSpec::Embedded)"
+---
+=== .cargo/config.toml ===
+# Build for ARMv7E-M with FPU (Cortex-M4F/M7F) by default. Point the target,
+# `--chip` and `memory.x` at your MCU — the STM32F401CC here is a placeholder.
+[build]
+target = "thumbv7em-none-eabihf"
+
+[target.thumbv7em-none-eabihf]
+# `cargo run` flashes the firmware over a debug probe and shows defmt logs.
+runner = "probe-rs run --chip STM32F401CCUx"
+rustflags = [
+    # cortex-m-rt's linker script (pulls in memory.x via build.rs).
+    "-C", "link-arg=-Tlink.x",
+    # defmt's interned-string sections.
+    "-C", "link-arg=-Tdefmt.x",
+]
+
+=== .gitignore ===
+/target
+
+=== Cargo.toml ===
+[package]
+name = "sample-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# critical-section-single-core: defmt-rtt needs a critical-section
+# implementation; on a single-core MCU interrupt masking is the right one.
+cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
+cortex-m-rt = "0.7"
+defmt = "1"
+defmt-rtt = "1"
+panic-probe = { version = "1", default-features = false, features = ["print-defmt"] }
+
+# Embedded binaries favor size; `debug = true` keeps symbols in the ELF so
+# probe-rs can still show source-level stack traces.
+[profile.release]
+codegen-units = 1
+debug = true
+lto = true
+opt-level = "z"
+
+=== build.rs ===
+//! Put `memory.x` on the linker search path and re-run when it changes.
+
+use std::env;
+use std::fs;
+use std::path::PathBuf;
+
+fn main() {
+    let out = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR is set by cargo"));
+    fs::copy("memory.x", out.join("memory.x")).expect("memory.x sits next to Cargo.toml");
+    println!("cargo:rustc-link-search={}", out.display());
+    println!("cargo:rerun-if-changed=memory.x");
+}
+
+=== memory.x ===
+/* Memory layout — placeholder for the STM32F401CC (256K flash, 64K RAM).
+   Adjust ORIGIN/LENGTH to your MCU's datasheet. */
+MEMORY
+{
+  FLASH : ORIGIN = 0x08000000, LENGTH = 256K
+  RAM   : ORIGIN = 0x20000000, LENGTH = 64K
+}
+
+=== src/main.rs ===
+//! sample-app — bare-metal firmware for ARM Cortex-M.
+//!
+//! Logs go through defmt over RTT: `cargo run` flashes the board with
+//! probe-rs and prints them. Panics print through defmt too.
+
+#![no_main]
+#![no_std]
+
+use defmt_rtt as _; // global logger: defmt frames over RTT
+use panic_probe as _; // panic handler: print over defmt, then halt
+
+#[cortex_m_rt::entry]
+fn main() -> ! {
+    defmt::info!("sample-app started");
+
+    loop {
+        // Sleep until the next interrupt — the place for your firmware logic.
+        cortex_m::asm::wfi();
+    }
+}

@@ -1,0 +1,14 @@
+# Build for ARMv7E-M with FPU (Cortex-M4F/M7F) by default. Point the target,
+# `--chip` and `memory.x` at your MCU — the STM32F401CC here is a placeholder.
+[build]
+target = "thumbv7em-none-eabihf"
+
+[target.thumbv7em-none-eabihf]
+# `cargo run` flashes the firmware over a debug probe and shows defmt logs.
+runner = "probe-rs run --chip STM32F401CCUx"
+rustflags = [
+    # cortex-m-rt's linker script (pulls in memory.x via build.rs).
+    "-C", "link-arg=-Tlink.x",
+    # defmt's interned-string sections.
+    "-C", "link-arg=-Tdefmt.x",
+]

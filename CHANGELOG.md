@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Config file (`~/.config/rise/config.toml`, or `$RISE_CONFIG`): defaults
+  for the web wizard — `backend`, `frontend`, `db`, `deployment`,
+  `testing`, `features`. Precedence: CLI flag > config > built-in default.
+  Interactive prompts are preselected with the configured values, `--yes`
+  takes them over the built-in defaults, and a config naming a backend or
+  frontend fills the shape itself. Unknown keys and values are rejected
+  with the file named; the project name and `--kind` keep having no
+  defaults.
 - New `--features` values: `cors` (permissive CORS — tower-http on Axum,
   actix-cors on Actix Web, a rocket_cors fairing on Rocket, ssr-gated in the
   Leptos templates; restrict the origin before deploying) and `auth`

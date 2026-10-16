@@ -93,6 +93,29 @@ target, cargo-leptos, protoc, probe-rs and the embedded target) and prints
 an install hint for every gap. A gap only matters for the stack that needs
 it, so the command always exits 0.
 
+## Config file
+
+Save your defaults once and stop repeating flags — create
+`~/.config/rise/config.toml` (the platform config dir: `%APPDATA%\rise\config.toml`
+on Windows) with any subset of:
+
+```toml
+backend = "axum"        # axum | actix | rocket
+frontend = "leptos"     # yew | leptos | askama | tera | minijinja | handlebars
+db = "sqlx"             # sqlx | diesel | sea-orm | sled
+deployment = "docker"   # docker | self-hosted
+testing = ["api"]
+features = ["cors", "auth"]
+```
+
+Precedence is always: **CLI flag > config > built-in default**. Interactive
+prompts are preselected with the config values (Enter accepts them);
+`--yes` and `--no-input` take them as values, and a config that names a
+backend or frontend fills the shape itself — `rise new my-app --kind web
+--yes` generates your preset stack. The project name and `--kind` have no
+defaults. Unknown keys or values fail with the file named, so a typo never
+silently does nothing. Set `RISE_CONFIG` to point at a different file.
+
 ## Shell completions
 
 ```bash

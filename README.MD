@@ -4,7 +4,7 @@
 
 Whether you're building a web apps, CLI tool, game, or something embedded and weird, 
 `rise` helps you spin up opinionated templates fast — with support for async runtimes, 
-frameworks like Axum, Bevy, and more.
+frameworks like Axum and macroquad, and more.
 
 Choose your stack, generate the boilerplate, and ship something spicy.
 
@@ -70,10 +70,9 @@ SPAs built with trunk, plus `--kind cli`, `--kind library`, `--kind game`
 (a playable macroquad window — move with arrows/WASD, collect coins) and
 `--kind embedded` (bare-metal ARM Cortex-M firmware: cortex-m-rt + defmt
 logging, flashed with probe-rs — adjust `.cargo/config.toml` and `memory.x`
-to your MCU).
-Other combinations the flags accept (`seed`, ...)
-end with a typed "not available yet" error — that's the roadmap, not a broken
-promise.
+to your MCU). The flags only
+accept stacks that actually generate — a combination no template renders yet
+(leptos on a rocket backend, say) ends with a typed "not available yet" error.
 
 Exit codes for scripting: `0` success · `1` error (message on stderr) ·
 `2` bad arguments · `130` you pressed Esc/Ctrl+C — no stack traces, no

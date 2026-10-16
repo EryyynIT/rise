@@ -50,6 +50,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.gitattributes` so the embedded templates and snapshots stay
   byte-identical across platforms; the PTY tests remain unix-only.
 
+### Removed
+
+- Enum values with no template behind them: `--backend warp`/`tide`/
+  `salvo`/`gotham`, `--frontend seed`/`svelte`/`react`/`vue`/`sauron` and
+  `--testing mock`. They used to parse and fail late with a typed
+  "not available yet" error; now clap rejects them at parse time and
+  names the values that actually generate.
+
 ### Changed
 
 - **The built-in default database is `sqlite` instead of `sqlx`** —

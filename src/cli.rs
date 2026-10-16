@@ -66,6 +66,10 @@ pub(crate) struct NewArgs {
     /// Do not ask any questions; missing options become an error.
     #[arg(long)]
     pub(crate) no_input: bool,
+
+    /// Do not run `git init` in the generated project.
+    #[arg(long)]
+    pub(crate) no_git: bool,
 }
 
 /// Web stack options. `--backend` alone means a backend-only app,

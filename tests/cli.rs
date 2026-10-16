@@ -97,6 +97,21 @@ fn new_generates_backend_project_without_prompts() {
 }
 
 #[test]
+fn new_with_no_git_skips_the_repository() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    rise()
+        .args(["new", "nogit-app", "--backend", "axum", "--no-git", "--yes"])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let project = tmp.path().join("nogit-app");
+    assert!(project.join("Cargo.toml").exists(), "generation ran");
+    assert!(!project.join(".git").exists(), "--no-git skips git init");
+}
+
+#[test]
 fn new_with_diesel_wires_a_connection_pool() {
     let tmp = tempfile::tempdir().expect("tempdir");
 

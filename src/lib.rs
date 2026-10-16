@@ -44,9 +44,12 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
         Some(dir) => templates::TemplateSource::Dir(dir),
         None => templates::TemplateSource::Embedded,
     };
+    let no_git = args.no_git;
     let (name, spec) = wizard::collect(args)?;
     let path = templates::generate(&spec, &name, &source)?;
-    init_git(&path);
+    if !no_git {
+        init_git(&path);
+    }
 
     let wasm_frontend = match &spec {
         // Frontend-only Yew and Leptos are both trunk-built SPAs.

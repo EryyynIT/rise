@@ -56,6 +56,36 @@ fn main() {
         .expect("failed to compile proto/hello.proto — is protoc installed?");
 }
 
+=== compose.yaml ===
+# The app plus its Postgres database in one command: docker compose up --build.
+# The app container gets DATABASE_URL pointing at the db service; the value
+# in .env (localhost) keeps working for a local `cargo run`.
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+      - "50051:50051"
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db/sample_app
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sample_app
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+volumes:
+  pgdata:
+
 === proto/hello.proto ===
 syntax = "proto3";
 

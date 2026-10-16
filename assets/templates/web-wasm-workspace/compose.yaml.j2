@@ -1,0 +1,34 @@
+# The app plus its Postgres database in one command: docker compose up --build.
+# The app container gets DATABASE_URL pointing at the db service; the value
+# in .env (localhost) keeps working for a local `cargo run`.
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+{%- if 'grpc' in backend.features %}
+      - "50051:50051"
+{%- endif %}
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db/{{ name | replace("-", "_") }}
+{%- if 'auth' in backend.features %}
+      # Change this in production (see .env.example).
+      JWT_SECRET: change-me-in-production
+{%- endif %}
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: {{ name | replace("-", "_") }}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+volumes:
+  pgdata:

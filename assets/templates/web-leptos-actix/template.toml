@@ -7,6 +7,9 @@ description = "Leptos fullstack app (SSR + hydration) on Actix Web, built with c
 [files.exclude_if]
 Dockerfile = "deployment != 'docker'"
 ".dockerignore" = "deployment != 'docker'"
+# docker compose runs the app together with its Postgres service; embedded
+# databases need no second service, non-docker deployments no compose file.
+"compose.yaml" = "deployment != 'docker' or backend.database in ['sled', 'sqlite']"
 # The gRPC service definition, its build script and the service module only
 # exist with the feature.
 "build.rs" = "'grpc' not in backend.features"

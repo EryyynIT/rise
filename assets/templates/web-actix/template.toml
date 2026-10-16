@@ -9,6 +9,9 @@ description = "Actix Web backend, optionally with a server-side template engine"
 # at the root.
 Dockerfile = "backend.deployment != 'docker' or workspace"
 ".dockerignore" = "backend.deployment != 'docker' or workspace"
+# docker compose runs the app together with its Postgres service; embedded
+# databases need no second service, non-docker deployments no compose file.
+"compose.yaml" = "backend.deployment != 'docker' or workspace or backend.database in ['sled', 'sqlite']"
 ".gitignore" = "workspace"
 # Handlebars uses its own .hbs file; askama/tera/minijinja share index.html;
 # every other frontend (or none) ships neither.

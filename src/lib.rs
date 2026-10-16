@@ -3,7 +3,7 @@
 use colored::{Colorize, CustomColor};
 
 use crate::cli::{Command, NewArgs};
-use crate::spec::{Feature, Frontend, ProjectSpec, WebAppSpec};
+use crate::spec::{Deployment, Feature, Frontend, ProjectSpec, WebAppSpec};
 
 mod cli;
 mod config;
@@ -68,6 +68,15 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
         ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack)) => Some(fullstack.backend.database),
         _ => None,
     };
+    let docker_deploy = match &spec {
+        ProjectSpec::WebApp(WebAppSpec::Backend(backend)) => {
+            backend.deployment == Deployment::Docker
+        }
+        ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack)) => {
+            fullstack.backend.deployment == Deployment::Docker
+        }
+        _ => false,
+    };
     let features: &[Feature] = match &spec {
         ProjectSpec::WebApp(WebAppSpec::Backend(backend)) => &backend.features,
         ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack)) => &fullstack.backend.features,
@@ -127,6 +136,11 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
         _ if wasm_frontend => out.push_str("  trunk serve\n"),
         _ if leptos_fullstack => out.push_str("  cargo leptos watch\n"),
         _ => out.push_str("  cargo run\n"),
+    }
+    if docker_deploy && database.is_some_and(|db| !db.is_embedded()) {
+        // The generated compose.yaml runs the app together with a Postgres
+        // service — the containerized alternative to the local run above.
+        out.push_str("  docker compose up --build  # the app plus postgres in containers\n");
     }
     print_out(out.as_bytes())
 }

@@ -348,6 +348,103 @@ fn new_with_grpc_generates_a_tonic_service() {
 }
 
 #[test]
+fn new_with_cors_adds_a_permissive_cors_layer() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "cors-app",
+            "--backend",
+            "axum",
+            "--db",
+            "sqlx",
+            "--deployment",
+            "docker",
+            "--features",
+            "cors",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let project = tmp.path().join("cors-app");
+    let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read Cargo.toml");
+    assert!(cargo_toml.contains("\"cors\""));
+    let main_rs = std::fs::read_to_string(project.join("src/main.rs")).expect("read main.rs");
+    assert!(main_rs.contains("CorsLayer::permissive"));
+}
+
+#[test]
+fn new_with_auth_generates_jwt_register_login() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "auth-app",
+            "--backend",
+            "axum",
+            "--db",
+            "sqlx",
+            "--deployment",
+            "docker",
+            "--features",
+            "auth",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let project = tmp.path().join("auth-app");
+    let auth_rs = std::fs::read_to_string(project.join("src/auth.rs")).expect("read auth.rs");
+    assert!(auth_rs.contains("/auth/register"));
+    assert!(auth_rs.contains("/auth/login"));
+    assert!(auth_rs.contains("/api/me"));
+    let cargo_toml = std::fs::read_to_string(project.join("Cargo.toml")).expect("read Cargo.toml");
+    assert!(cargo_toml.contains("argon2"));
+    assert!(cargo_toml.contains("jsonwebtoken"));
+    let env_example =
+        std::fs::read_to_string(project.join(".env.example")).expect("read .env.example");
+    assert!(env_example.contains("JWT_SECRET"));
+    let main_rs = std::fs::read_to_string(project.join("src/main.rs")).expect("read main.rs");
+    assert!(main_rs.contains("auth::migrate"));
+    assert!(main_rs.contains("auth::routes"));
+}
+
+#[test]
+fn new_without_auth_has_no_auth_module() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "plain-app",
+            "--backend",
+            "axum",
+            "--db",
+            "sqlx",
+            "--deployment",
+            "docker",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let project = tmp.path().join("plain-app");
+    assert!(!project.join("src/auth.rs").exists());
+    let env_example =
+        std::fs::read_to_string(project.join(".env.example")).expect("read .env.example");
+    assert!(!env_example.contains("JWT_SECRET"));
+}
+
+#[test]
 fn sqlx_testing_without_sqlx_database_is_rejected() {
     Command::cargo_bin("rise")
         .expect("binary")

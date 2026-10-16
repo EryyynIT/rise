@@ -72,7 +72,7 @@ async fn main() -> std::io::Result<()> {
     let db = db::open().expect("failed to open the database");
 {%- endif %}
 {%- if 'auth' in backend.features %}
-    // Fail at startup, not on the first request, when JWT_SECRET is unset.
+    // Fail at startup, not on the first request, when JWT_SECRET is unset or the placeholder.
     auth::check_secret();
 {%- if backend.database == 'sqlx' or backend.database == 'sqlite' or backend.database == 'sea-orm' %}
     // The users table behind /auth/register and /auth/login.

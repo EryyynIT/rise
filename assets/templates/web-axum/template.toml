@@ -13,6 +13,8 @@ Dockerfile = "backend.deployment != 'docker' or workspace"
 # databases need no second service, non-docker deployments no compose file.
 "compose.yaml" = "backend.deployment != 'docker' or workspace or backend.database in ['sled', 'sqlite']"
 ".gitignore" = "workspace"
+# The workspace root ships the project README; members don't repeat it.
+"README.md" = "workspace"
 # Handlebars uses its own .hbs file; askama/tera/minijinja share index.html;
 # every other frontend (or none) ships neither.
 "templates/index.html" = "frontend not in ['askama', 'tera', 'minijinja']"

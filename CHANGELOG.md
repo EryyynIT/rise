@@ -66,6 +66,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "not available yet" error; now clap rejects them at parse time and
   names the values that actually generate.
 
+### Fixed
+
+- The config file and the flags now obey one validation rule set: a config
+  `backend` satisfies a `--db` flag, config `features` without any backend
+  are rejected instead of silently dropped, and flags survive the
+  config-driven re-entry into the wizard.
+- A config `frontend` alone means a frontend-only app under `--yes` too —
+  it no longer forces a fullstack axum app (one shape rule for every
+  non-interactive mode).
+- A bare template-engine frontend (`--frontend tera` without `--backend`)
+  fails with an honest "renders inside a backend" message instead of
+  pretending the template is "not available yet".
+- `_` is rejected as a project name: cargo accepts the package, but the
+  generated use-statements do not parse (a reserved identifier).
+- The workspace readme gained the `cp backend/.env.example .env` step and
+  the grpc port mapping its docker section was missing; a failed
+  crash-only cleanup now says so instead of leaving a mysterious
+  `TargetNotEmpty` for the next run.
+
 ### Changed
 
 - Auth projects refuse to start when `JWT_SECRET` still holds the

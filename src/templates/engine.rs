@@ -2064,6 +2064,26 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_web_axum_fullstack_yew_sqlite_docker_grpc() {
+        // The one combo nothing pinned before the audit: a WASM workspace
+        // on an embedded database with docker — the compose exclusion, the
+        // .gitignore/.dockerignore data dirs and the readme's docker branch
+        // all hinge on it.
+        insta::assert_snapshot!(snapshot_output(&ProjectSpec::WebApp(
+            WebAppSpec::Fullstack(FullstackSpec {
+                frontend: Frontend::Yew,
+                backend: BackendSpec {
+                    backend: Backend::Axum,
+                    database: Database::SQLite,
+                    deployment: Deployment::Docker,
+                    testing: vec![],
+                    features: vec![Feature::gRPC, Feature::Auth],
+                },
+            })
+        )));
+    }
+
+    #[test]
     fn snapshot_web_axum_fullstack_leptos() {
         insta::assert_snapshot!(snapshot_output(&fullstack_spec(
             Backend::Axum,
@@ -2322,6 +2342,14 @@ mod tests {
         insta::assert_snapshot!(snapshot_output(&fullstack_spec(
             Backend::Rocket,
             Frontend::Handlebars
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_rocket_fullstack_tera() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec(
+            Backend::Rocket,
+            Frontend::Tera
         )));
     }
 

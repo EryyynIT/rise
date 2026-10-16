@@ -80,6 +80,12 @@ fn validate(name: &str) -> std::result::Result<(), &'static str> {
     if WINDOWS_DEVICE_NAMES.contains(&name.to_ascii_lowercase().as_str()) {
         return Err("the name is a reserved device name on Windows");
     }
+    // `_` alone is a reserved identifier: cargo accepts the package, but
+    // generated use-statements (`use _::app::*;`) do not parse. `__` and
+    // `_x` are fine.
+    if name == "_" {
+        return Err("`_` is a reserved identifier in Rust");
+    }
     Ok(())
 }
 
@@ -151,6 +157,18 @@ mod tests {
         }
         // Lookalikes stay valid.
         for name in ["console", "con-app", "com10", "null"] {
+            assert!(ProjectName::new(name.to_owned()).is_ok(), "{name}");
+        }
+    }
+
+    #[test]
+    fn rejects_the_reserved_underscore_identifier() {
+        let Err(Error::InvalidProjectName { reason, .. }) = ProjectName::new("_".to_owned()) else {
+            panic!("`_` must be rejected");
+        };
+        assert_eq!(reason, "`_` is a reserved identifier in Rust");
+        // Longer underscore names are ordinary identifiers.
+        for name in ["__", "_x", "_app"] {
             assert!(ProjectName::new(name.to_owned()).is_ok(), "{name}");
         }
     }

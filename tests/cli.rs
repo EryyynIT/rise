@@ -909,6 +909,10 @@ fn new_generates_yew_fullstack_workspace_without_prompts() {
     // The workspace root ships project-level files; members don't repeat them.
     assert!(project.join("Dockerfile").exists());
     assert!(project.join("README.md").exists());
+    // sqlx + docker: the root ships the compose file running the app and
+    // its postgres service together.
+    assert!(project.join("compose.yaml").exists());
+    assert!(!project.join("backend/compose.yaml").exists());
     assert!(!project.join("backend/Dockerfile").exists());
     assert!(!project.join("frontend/Dockerfile").exists());
     assert!(project.join(".git").exists(), "git init ran");
@@ -1619,6 +1623,8 @@ fn new_with_sqlite_runs_without_any_setup() {
 fn embedded_database_with_auth_still_points_at_env_example() {
     // sqlite needs no setup, but JWT_SECRET lives in .env.example — the
     // generated app refuses to start without it, so the hint must stay.
+    let tmp = tempfile::tempdir().expect("tempdir");
+
     rise()
         .args([
             "new",
@@ -1633,11 +1639,65 @@ fn embedded_database_with_auth_still_points_at_env_example() {
             "self-hosted",
             "--no-input",
         ])
+        .current_dir(tmp.path())
         .assert()
         .success()
         .stdout(predicate::str::contains(
             "cp .env.example .env  # set JWT_SECRET",
         ));
+}
+
+#[test]
+fn docker_with_a_server_database_gets_a_compose_file() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    rise()
+        .args([
+            "new",
+            "compose-app",
+            "--backend",
+            "axum",
+            "--db",
+            "sqlx",
+            "--deployment",
+            "docker",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("docker compose up"));
+
+    let compose = std::fs::read_to_string(tmp.path().join("compose-app/compose.yaml"))
+        .expect("read compose.yaml");
+    assert!(compose.contains("image: postgres:17"));
+    assert!(compose.contains("postgres://postgres:postgres@db/compose_app"));
+    assert!(compose.contains("condition: service_healthy"));
+}
+
+#[test]
+fn docker_with_an_embedded_database_gets_no_compose_file() {
+    // sqlite and sled run in-process — there is no second service to compose.
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    rise()
+        .args([
+            "new",
+            "no-compose-app",
+            "--backend",
+            "axum",
+            "--db",
+            "sqlite",
+            "--deployment",
+            "docker",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("docker compose up").not());
+
+    assert!(!tmp.path().join("no-compose-app/compose.yaml").exists());
 }
 
 #[test]

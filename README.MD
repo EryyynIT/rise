@@ -82,6 +82,17 @@ Exit codes for scripting: `0` success · `1` error (message on stderr) ·
 `2` bad arguments · `130` you pressed Esc/Ctrl+C — no stack traces, no
 half-written project left behind.
 
+## Checking prerequisites
+
+```bash
+rise doctor
+```
+
+probes what the generated stacks need (trunk, the `wasm32-unknown-unknown`
+target, cargo-leptos, protoc, probe-rs and the embedded target) and prints
+an install hint for every gap. A gap only matters for the stack that needs
+it, so the command always exits 0.
+
 ## Shell completions
 
 ```bash

@@ -313,8 +313,8 @@ mod tests {
     #[test]
     fn leptos_accepts_testing_features_and_a_database() {
         // The leptos templates wire databases into server functions and
-        // render the same testing/features content as the REST templates;
-        // only `mock` testing is rejected, later, by `validate_testing`.
+        // render the same testing/features content as the REST templates,
+        // so every testing and feature value is accepted for leptos.
         let args = NewArgs {
             web: WebFlags {
                 backend: Some(Backend::Axum),

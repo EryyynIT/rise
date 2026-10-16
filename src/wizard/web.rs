@@ -247,9 +247,7 @@ fn complete_backend(
 }
 
 /// The testing options the templates render for the given database.
-/// `mock` is offered to no stack: the generated code has no trait seam
-/// for a mock to implement, so the option would emit a dead dependency
-/// and nothing else. `sqlx` generates a pool test, which needs a sqlx
+/// `sqlx` generates a pool test, which needs a sqlx
 /// pool to exercise — both sqlx-backed databases (postgres and sqlite)
 /// have one; the flag path rejects `--testing sqlx` with another
 /// database in `validate_flags`. Flag-passed values outside this list
@@ -343,8 +341,8 @@ fn fill_multi<T: Clone>(
     }
 }
 
-/// The backends with templates. Flag-passed others fail at generation
-/// with a typed `TemplateNotFound`; the wizard does not offer them.
+/// The backends with templates. Every `Backend` variant has one — the
+/// enum only lists stacks that generate.
 fn implemented_backends() -> Vec<Backend> {
     vec![Backend::Axum, Backend::Actix, Backend::Rocket]
 }

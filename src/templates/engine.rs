@@ -176,25 +176,25 @@ fn template_plan(spec: &ProjectSpec, name: &ProjectName) -> Result<Vec<TemplateS
                 other.to_string().to_lowercase()
             ))),
         },
-        // A fullstack app with a template engine is the backend template
-        // plus server-side rendering; the `frontend` context field drives
-        // the engine-specific blocks.
-        ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack))
-            if fullstack.frontend.is_template_engine() =>
-        {
-            Ok(vec![TemplateStep::root(
-                backend_template(fullstack.backend.backend),
-                name,
-            )])
-        }
-        // A fullstack app with a WASM frontend is a workspace: the backend
-        // template renders into `backend/` (its `frontend`-conditional
-        // blocks add static serving), the frontend template into
-        // `frontend/`, and a small internal template wires up the root.
-        ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack))
-            if fullstack.frontend == Frontend::Yew =>
-        {
-            Ok(vec![
+        // The match is exhaustive on purpose: a new Frontend variant fails
+        // to compile here instead of falling into a late TemplateNotFound.
+        ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack)) => match fullstack.frontend {
+            // A fullstack app with a template engine is the backend
+            // template plus server-side rendering; the `frontend` context
+            // field drives the engine-specific blocks. Listed explicitly:
+            // a guard arm is invisible to the exhaustiveness check.
+            Frontend::Minijinja | Frontend::Tera | Frontend::Askama | Frontend::Handlebars => {
+                Ok(vec![TemplateStep::root(
+                    backend_template(fullstack.backend.backend),
+                    name,
+                )])
+            }
+            // A fullstack app with a WASM frontend is a workspace: the
+            // backend template renders into `backend/` (its
+            // `frontend`-conditional blocks add static serving), the
+            // frontend template into `frontend/`, and a small internal
+            // template wires up the root.
+            Frontend::Yew => Ok(vec![
                 TemplateStep::root("web-wasm-workspace", name),
                 TemplateStep::member(
                     backend_template(fullstack.backend.backend),
@@ -203,32 +203,22 @@ fn template_plan(spec: &ProjectSpec, name: &ProjectName) -> Result<Vec<TemplateS
                     "backend",
                 ),
                 TemplateStep::member("frontend-yew", "frontend", name, "frontend"),
-            ])
-        }
-        // A Leptos fullstack app is a single crate again: leptos_axum /
-        // leptos_actix integrate the frontend into the backend, and
-        // cargo-leptos builds both targets from one manifest.
-        ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack))
-            if fullstack.frontend == Frontend::Leptos =>
-        {
-            let id = match fullstack.backend.backend {
-                Backend::Axum => "web-leptos-axum",
-                Backend::Actix => "web-leptos-actix",
-                other => {
-                    return Err(Error::TemplateNotFound(format!(
-                        "web-leptos-{}",
-                        other.to_string().to_lowercase()
-                    )));
-                }
-            };
-            Ok(vec![TemplateStep::root(id, name)])
-        }
-        ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack)) => {
-            Err(Error::TemplateNotFound(format!(
-                "web-fullstack-{}",
-                fullstack.frontend.to_string().to_lowercase()
-            )))
-        }
+            ]),
+            // A Leptos fullstack app is a single crate again: leptos_axum /
+            // leptos_actix integrate the frontend into the backend, and
+            // cargo-leptos builds both targets from one manifest.
+            Frontend::Leptos => {
+                let id = match fullstack.backend.backend {
+                    Backend::Axum => "web-leptos-axum",
+                    Backend::Actix => "web-leptos-actix",
+                    // Leptos integrates with axum and actix only.
+                    Backend::Rocket => {
+                        return Err(Error::TemplateNotFound("web-leptos-rocket".to_owned()));
+                    }
+                };
+                Ok(vec![TemplateStep::root(id, name)])
+            }
+        },
         ProjectSpec::CliApp => Ok(vec![TemplateStep::root("cli", name)]),
         ProjectSpec::Library => Ok(vec![TemplateStep::root("library", name)]),
         ProjectSpec::Embedded => Ok(vec![TemplateStep::root("embedded-cortex-m", name)]),

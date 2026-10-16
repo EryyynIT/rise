@@ -1680,6 +1680,30 @@ mod tests {
         )));
     }
 
+    // Permissive CORS: tower-http's CorsLayer on axum/leptos-axum,
+    // actix-cors on actix/leptos-actix, a rocket_cors fairing on rocket.
+    #[test]
+    fn snapshot_web_axum_cors() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Axum,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![],
+            vec![Feature::Cors],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_cors() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Actix,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![],
+            vec![Feature::Cors],
+        )));
+    }
+
     #[test]
     fn snapshot_web_axum_sea_orm() {
         insta::assert_snapshot!(snapshot_output(&backend_spec_full(
@@ -1792,6 +1816,17 @@ mod tests {
             Deployment::Docker,
             vec![],
             vec![Feature::gRPC],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_rocket_cors() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Rocket,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![],
+            vec![Feature::Cors],
         )));
     }
 
@@ -2103,6 +2138,25 @@ mod tests {
             Backend::Actix,
             Frontend::Leptos,
             vec![Feature::gRPC],
+        )));
+    }
+
+    // Permissive CORS wraps the whole leptos server (ssr-only deps).
+    #[test]
+    fn snapshot_web_axum_fullstack_leptos_cors() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_featured(
+            Backend::Axum,
+            Frontend::Leptos,
+            vec![Feature::Cors],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_fullstack_leptos_cors() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_featured(
+            Backend::Actix,
+            Frontend::Leptos,
+            vec![Feature::Cors],
         )));
     }
 

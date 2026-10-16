@@ -20,6 +20,9 @@ async fn main() -> std::io::Result<()> {
 {%- if 'rate-limiting' in backend.features %}
     use actix_governor::{Governor, GovernorConfigBuilder};
 {%- endif %}
+{%- if 'cors' in backend.features %}
+    use actix_cors::Cors;
+{%- endif %}
     use leptos::config::get_configuration;
     use leptos::prelude::*;
     use leptos_actix::{LeptosRoutes, generate_route_list};
@@ -87,6 +90,12 @@ async fn main() -> std::io::Result<()> {
         App::new()
 {%- if 'rate-limiting' in backend.features %}
             .wrap(Governor::new(&governor_conf))
+{%- endif %}
+{%- if 'cors' in backend.features %}
+            // Answer cross-origin requests (and preflights) from any
+            // origin. Restrict this to your frontend's origin before
+            // deploying.
+            .wrap(Cors::permissive())
 {%- endif %}
             // Serve the compiled JS/WASM/CSS bundle.
             .service(Files::new("/pkg", format!("{site_root}/pkg")))

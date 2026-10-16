@@ -15,6 +15,9 @@ actix-ws = { version = "0.3", optional = true }
 {%- if 'rate-limiting' in backend.features %}
 actix-governor = { version = "0.10", optional = true }
 {%- endif %}
+{%- if 'cors' in backend.features %}
+actix-cors = { version = "0.7", optional = true }
+{%- endif %}
 {%- if 'graph-ql' in backend.features %}
 async-graphql = { version = "7", optional = true }
 async-graphql-actix-web = { version = "7", optional = true }
@@ -52,6 +55,9 @@ ssr = [
     {%- endif %}
     {%- if 'rate-limiting' in backend.features %}
     "dep:actix-governor",
+    {%- endif %}
+    {%- if 'cors' in backend.features %}
+    "dep:actix-cors",
     {%- endif %}
     {%- if 'graph-ql' in backend.features %}
     "dep:async-graphql",

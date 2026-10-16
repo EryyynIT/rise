@@ -10,6 +10,9 @@ dotenvy = "0.15"
 {%- if 'web-sockets' in backend.features %}
 rocket_ws = "0.1"
 {%- endif %}
+{%- if 'cors' in backend.features %}
+rocket_cors = "0.6"
+{%- endif %}
 {%- if 'graph-ql' in backend.features %}
 async-graphql = "7"
 async-graphql-rocket = "7"

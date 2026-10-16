@@ -11,6 +11,9 @@ use rocket::response::content::RawHtml;
 use rocket::futures::{SinkExt, StreamExt};
 use rocket_ws::{Channel, WebSocket};
 {%- endif %}
+{%- if 'cors' in backend.features %}
+use rocket_cors::CorsOptions;
+{%- endif %}
 {%- if 'graph-ql' in backend.features %}
 use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema, http::GraphiQLSource};
 use async_graphql_rocket::{GraphQLQuery, GraphQLRequest, GraphQLResponse};
@@ -90,6 +93,14 @@ async fn main() -> Result<(), rocket::Error> {
 {%- endif %}
 {%- if 'graph-ql' in backend.features %}
     let rocket = rocket.mount("/", routes![graphiql, graphql_query, graphql_request]);
+{%- endif %}
+{%- if 'cors' in backend.features %}
+    // Answer cross-origin requests (and preflights) from any origin.
+    // Restrict this to your frontend's origin before deploying.
+    let cors = CorsOptions::default()
+        .to_cors()
+        .expect("valid CORS configuration");
+    let rocket = rocket.attach(cors);
 {%- endif %}
 {%- if 'rate-limiting' in backend.features %}
     let rocket = rocket.attach(rate_limit::RateLimit::new());

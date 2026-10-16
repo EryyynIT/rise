@@ -24,8 +24,8 @@ tonic = "0.14"
 tonic-prost = "0.14"
 prost = "0.14"
 {%- endif %}
-{%- if frontend == 'yew' %}
-tower-http = { version = "0.6", features = ["fs"] }
+{%- if frontend == 'yew' or 'cors' in backend.features %}
+tower-http = { version = "0.6", features = [{% if frontend == 'yew' %}"fs"{% endif %}{% if frontend == 'yew' and 'cors' in backend.features %}, {% endif %}{% if 'cors' in backend.features %}"cors"{% endif %}] }
 {%- endif %}
 {%- if frontend == 'askama' %}
 askama = "0.16"

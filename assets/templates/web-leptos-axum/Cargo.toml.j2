@@ -27,6 +27,9 @@ dotenvy = { version = "0.15", optional = true }
 {%- if 'rate-limiting' in backend.features %}
 tower_governor = { version = "0.8", optional = true }
 {%- endif %}
+{%- if 'cors' in backend.features %}
+tower-http = { version = "0.6", features = ["cors"], optional = true }
+{%- endif %}
 {%- if 'graph-ql' in backend.features %}
 async-graphql = { version = "7", optional = true }
 async-graphql-axum = { version = "7", optional = true }
@@ -57,6 +60,9 @@ ssr = [
     "dep:dotenvy",
     {%- if 'rate-limiting' in backend.features %}
     "dep:tower_governor",
+    {%- endif %}
+    {%- if 'cors' in backend.features %}
+    "dep:tower-http",
     {%- endif %}
     {%- if 'graph-ql' in backend.features %}
     "dep:async-graphql",

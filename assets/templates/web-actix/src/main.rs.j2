@@ -10,6 +10,9 @@ use actix_files::Files;
 {%- if 'rate-limiting' in backend.features %}
 use actix_governor::{Governor, GovernorConfigBuilder};
 {%- endif %}
+{%- if 'cors' in backend.features %}
+use actix_cors::Cors;
+{%- endif %}
 {%- if 'graph-ql' in backend.features %}
 use actix_web::{post, web};
 use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema, http::GraphiQLSource};
@@ -247,6 +250,11 @@ async fn main() -> std::io::Result<()> {
             .service({% if frontend == 'yew' %}hello{% else %}root{% endif %});
 {%- else %}
         let app = App::new().service({% if frontend == 'yew' %}hello{% else %}root{% endif %});
+{%- endif %}
+{%- if 'cors' in backend.features %}
+        // Answer cross-origin requests (and preflights) from any origin.
+        // Restrict this to your frontend's origin before deploying.
+        let app = app.wrap(Cors::permissive());
 {%- endif %}
 {%- if 'web-sockets' in backend.features %}
         let app = app.service(ws);

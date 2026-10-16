@@ -73,30 +73,23 @@ pub struct FullstackSpec {
     pub backend: BackendSpec,
 }
 
-/// Web backend framework.
+/// Web backend framework. Only stacks with real template content are
+/// listed — the CLI rejects anything else at parse time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum Backend {
     Actix,
     Axum,
     Rocket,
-    Warp,
-    Tide,
-    Salvo,
-    Gotham,
 }
 
-/// Frontend framework or template engine.
+/// Frontend framework or template engine. Only stacks with real template
+/// content are listed — the CLI rejects anything else at parse time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum Frontend {
     Yew,
     Leptos,
-    Seed,
-    Svelte,
-    React,
-    Vue,
-    Sauron,
     Minijinja,
     Tera,
     Askama,
@@ -157,8 +150,7 @@ pub enum Deployment {
     SelfHosted,
 }
 
-/// Testing tools. `Mock` is accepted by the CLI but rejected by the
-/// wizard: no template renders mock content.
+/// Testing tools.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum Testing {
@@ -166,7 +158,6 @@ pub enum Testing {
     #[serde(rename = "sqlx")]
     #[value(name = "sqlx")]
     SQLx,
-    Mock,
 }
 
 /// Optional backend features.

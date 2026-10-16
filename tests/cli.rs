@@ -995,7 +995,10 @@ fn new_generates_rocket_yew_workspace_without_prompts() {
 }
 
 #[test]
-fn fullstack_with_other_wasm_frontends_is_an_actionable_error() {
+fn unimplemented_frontends_are_rejected_at_the_cli() {
+    // The enum lists only stacks with template content: `seed` is not a
+    // value the flags accept — clap names the real choices instead of a
+    // late "template not found" from inside the engine.
     rise()
         .args([
             "new",
@@ -1011,8 +1014,9 @@ fn fullstack_with_other_wasm_frontends_is_an_actionable_error() {
             "--no-input",
         ])
         .assert()
-        .failure()
-        .stderr(predicate::str::contains("web-fullstack-seed"));
+        .code(2)
+        .stderr(predicate::str::contains("invalid value 'seed'"))
+        .stderr(predicate::str::contains("leptos"));
 }
 
 #[test]
@@ -1150,10 +1154,9 @@ fn leptos_fullstack_wires_the_database() {
 }
 
 #[test]
-fn mock_testing_is_rejected_for_every_stack() {
+fn mock_testing_is_rejected_at_the_cli() {
     // No template renders mock content (the generated code has no trait
-    // seam to mock), so the option is rejected up front — here on a
-    // plain backend.
+    // seam to mock), so `mock` is not a value the flags accept at all.
     rise()
         .args([
             "new",
@@ -1169,10 +1172,8 @@ fn mock_testing_is_rejected_for_every_stack() {
             "--no-input",
         ])
         .assert()
-        .failure()
-        .stderr(predicate::str::contains(
-            "testing options not available for this stack: mock",
-        ));
+        .code(2)
+        .stderr(predicate::str::contains("invalid value 'mock'"));
 
     // Every other testing option and every feature is accepted, leptos
     // included.

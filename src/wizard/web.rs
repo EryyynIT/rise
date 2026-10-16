@@ -462,8 +462,6 @@ mod tests {
         assert!(options.contains(&Frontend::Yew));
         assert!(options.contains(&Frontend::Leptos));
         assert!(options.contains(&Frontend::Askama));
-        assert!(!options.contains(&Frontend::Seed));
-        assert!(!options.contains(&Frontend::React));
     }
 
     #[test]
@@ -551,14 +549,6 @@ mod tests {
     }
 
     #[test]
-    fn mock_testing_is_not_offered() {
-        // No template renders mock content, so no database offers it.
-        for database in Database::iter() {
-            assert!(!implemented_testing(database).contains(&Testing::Mock));
-        }
-    }
-
-    #[test]
     fn sqlx_testing_is_offered_only_with_a_sqlx_backed_database() {
         // The sqlx pool test exercises a sqlx pool: postgres and sqlite.
         assert_eq!(
@@ -577,15 +567,15 @@ mod tests {
     #[test]
     fn unimplemented_testing_options_are_rejected_by_name() {
         let err = reject_unavailable(
-            &[Testing::Mock],
-            &[Testing::Api, Testing::SQLx],
+            &[Testing::SQLx],
+            &[Testing::Api],
             Error::TestingNotAvailable,
         )
-        .expect_err("mock is not in the given implemented list");
+        .expect_err("sqlx is not in the given implemented list");
         let Error::TestingNotAvailable(names) = err else {
             panic!("expected TestingNotAvailable");
         };
-        assert_eq!(names, "mock");
+        assert_eq!(names, "sqlx");
     }
 
     #[test]
@@ -738,12 +728,12 @@ mod tests {
     #[test]
     fn config_values_outside_the_implemented_list_are_rejected() {
         // A config file goes through the same availability validation as
-        // flags: `mock` has no template content anywhere.
+        // flags: `sqlx` testing needs a sqlx-backed database.
         let config = Config {
             backend: Some(Backend::Axum),
             database: Some(Database::Sled),
             deployment: Some(Deployment::Docker),
-            testing: vec![Testing::Mock],
+            testing: vec![Testing::SQLx],
             ..Config::default()
         };
         let result = complete(WebFlags::default(), Interaction::NonInteractive, &config);

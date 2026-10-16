@@ -157,17 +157,13 @@ fn render_plan(
 /// Map a spec to the plan of embedded templates implementing its stack.
 fn template_plan(spec: &ProjectSpec, name: &ProjectName) -> Result<Vec<TemplateStep>> {
     let backend_template = |backend: Backend| match backend {
-        Backend::Axum => Ok("web-axum"),
-        Backend::Actix => Ok("web-actix"),
-        Backend::Rocket => Ok("web-rocket"),
-        other => Err(Error::TemplateNotFound(format!(
-            "web-{}",
-            other.to_string().to_lowercase()
-        ))),
+        Backend::Axum => "web-axum",
+        Backend::Actix => "web-actix",
+        Backend::Rocket => "web-rocket",
     };
     match spec {
         ProjectSpec::WebApp(WebAppSpec::Backend(backend)) => Ok(vec![TemplateStep::root(
-            backend_template(backend.backend)?,
+            backend_template(backend.backend),
             name,
         )]),
         ProjectSpec::WebApp(WebAppSpec::Frontend(frontend)) => match frontend.frontend {
@@ -187,7 +183,7 @@ fn template_plan(spec: &ProjectSpec, name: &ProjectName) -> Result<Vec<TemplateS
             if fullstack.frontend.is_template_engine() =>
         {
             Ok(vec![TemplateStep::root(
-                backend_template(fullstack.backend.backend)?,
+                backend_template(fullstack.backend.backend),
                 name,
             )])
         }
@@ -201,7 +197,7 @@ fn template_plan(spec: &ProjectSpec, name: &ProjectName) -> Result<Vec<TemplateS
             Ok(vec![
                 TemplateStep::root("web-wasm-workspace", name),
                 TemplateStep::member(
-                    backend_template(fullstack.backend.backend)?,
+                    backend_template(fullstack.backend.backend),
                     "backend",
                     name,
                     "backend",
@@ -594,14 +590,6 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_stack_is_template_not_found() {
-        let name = project_name("app");
-        let err = template_plan(&backend_spec(Backend::Warp, Deployment::Docker), &name)
-            .expect_err("no warp template yet");
-        assert!(matches!(err, Error::TemplateNotFound(id) if id == "web-warp"));
-    }
-
-    #[test]
     fn fullstack_with_template_engine_plans_the_backend_template() {
         let name = project_name("app");
         let spec = fullstack_spec(Backend::Axum, Frontend::Askama);
@@ -634,11 +622,13 @@ mod tests {
     }
 
     #[test]
-    fn other_frontend_only_stacks_are_template_not_found() {
+    fn a_template_engine_alone_is_not_a_frontend() {
+        // Template engines render inside a backend — a frontend-only spec
+        // with one has nothing to serve it.
         let name = project_name("app");
-        let spec = frontend_spec(Frontend::Seed, Deployment::SelfHosted);
-        let err = template_plan(&spec, &name).expect_err("no seed template yet");
-        assert!(matches!(err, Error::TemplateNotFound(id) if id == "web-seed"));
+        let spec = frontend_spec(Frontend::Askama, Deployment::SelfHosted);
+        let err = template_plan(&spec, &name).expect_err("no standalone engine");
+        assert!(matches!(err, Error::TemplateNotFound(id) if id == "web-askama"));
     }
 
     #[test]
@@ -669,13 +659,9 @@ mod tests {
     }
 
     #[test]
-    fn other_fullstack_wasm_frontends_are_template_not_found() {
-        let name = project_name("app");
-        let spec = fullstack_spec(Backend::Axum, Frontend::Seed);
-        let err = template_plan(&spec, &name).expect_err("no seed fullstack template yet");
-        assert!(matches!(err, Error::TemplateNotFound(id) if id == "web-fullstack-seed"));
-
+    fn leptos_fullstack_with_rocket_is_template_not_found() {
         // Leptos integrates with axum and actix only.
+        let name = project_name("app");
         let spec = fullstack_spec(Backend::Rocket, Frontend::Leptos);
         let err = template_plan(&spec, &name).expect_err("no rocket leptos template yet");
         assert!(matches!(err, Error::TemplateNotFound(id) if id == "web-leptos-rocket"));

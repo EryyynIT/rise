@@ -254,7 +254,7 @@ mod tests {
     fn backend_stack_flags_require_backend() {
         let args = NewArgs {
             web: WebFlags {
-                frontend: Some(Frontend::React),
+                frontend: Some(Frontend::Yew),
                 database: Some(Database::SQLx),
                 ..WebFlags::default()
             },
@@ -301,7 +301,7 @@ mod tests {
     fn deployment_with_plain_frontend_is_fine() {
         let args = NewArgs {
             web: WebFlags {
-                frontend: Some(Frontend::React),
+                frontend: Some(Frontend::Yew),
                 deployment: Some(Deployment::Docker),
                 ..WebFlags::default()
             },

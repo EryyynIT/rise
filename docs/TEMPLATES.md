@@ -36,7 +36,9 @@ Dockerfile = "backend.deployment != 'docker'"
 "templates/index.hbs" = "frontend != 'handlebars'"
 ```
 
-Unknown manifest fields are rejected, so typos fail loudly.
+Unknown manifest fields are rejected, so typos fail loudly. The same goes
+for `exclude_if` keys: a key that names no file in the template fails the
+render — a typo'd key would otherwise be a silently dead rule.
 
 ## Rendering
 
@@ -84,7 +86,8 @@ doesn't have that stack (`{% if backend %}...{% endif %}`).
 ## Behaviour to rely on
 
 - rise refuses to generate into a directory that exists and is not empty.
-- If rendering fails midway, a directory rise created is removed again — no
+- If rendering fails midway, a directory rise created is removed again, and
+  a pre-existing empty directory is emptied of what the run wrote — no
   half-written projects.
 - Template paths that would escape the target directory (`../`, absolute)
   are rejected.

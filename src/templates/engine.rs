@@ -338,6 +338,9 @@ fn output_path(path: &str) -> &str {
 }
 
 /// Evaluate every `exclude_if` rule once against the render context.
+/// A rule key must name a real template file (output path, `.j2`
+/// stripped): a typo would otherwise turn the rule silently dead and
+/// ship the file in every project.
 fn excluded_paths<'a>(
     template: &'a Template,
     env: &Environment,
@@ -345,6 +348,19 @@ fn excluded_paths<'a>(
 ) -> Result<HashSet<&'a str>> {
     let mut excluded = HashSet::new();
     for (path, source) in &template.manifest().files.exclude_if {
+        if !template
+            .files()
+            .iter()
+            .any(|f| output_path(f.path()) == path)
+        {
+            return Err(Error::Render(minijinja::Error::new(
+                JinjaErrorKind::InvalidOperation,
+                format!(
+                    "{}: exclude_if key `{path}` matches no file in the template",
+                    template.manifest().name
+                ),
+            )));
+        }
         let expr = env.compile_expression(source)?;
         if expr.eval(ctx.clone())?.is_true() {
             excluded.insert(path.as_str());
@@ -848,6 +864,31 @@ mod tests {
 
         let readme = fs::read_to_string(target_dir.join("README.md")).expect("read output");
         assert_eq!(readme, "# custom-app");
+    }
+
+    #[test]
+    fn exclude_if_key_must_name_a_template_file() {
+        // A key that matches no output path is a dead rule — fail loudly
+        // instead of shipping the file in every project.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let template_dir = tmp.path().join("bad-template");
+        fs::create_dir(&template_dir).expect("mkdir");
+        fs::write(
+            template_dir.join("template.toml"),
+            "name = \"bad\"\ndescription = \"dead rule\"\n\n\
+             [files.exclude_if]\n\"READM.md\" = \"true\"",
+        )
+        .expect("write manifest");
+        fs::write(template_dir.join("README.md.j2"), "# {{ name }}").expect("write file");
+
+        let target_dir = tmp.path().join("out");
+        let template = Template::from_dir(&template_dir).expect("load template");
+        let err = render_test(&template, &ProjectSpec::CliApp, "app", &target_dir)
+            .expect_err("the dead rule must fail the render");
+        assert!(
+            matches!(err, Error::Render(ref e) if e.to_string().contains("`READM.md`")),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]

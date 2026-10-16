@@ -66,7 +66,8 @@ impl TemplateStep {
 ///
 /// The target directory is created; if it already exists it must be empty.
 /// Generation is crash-only: when rendering or writing fails, a directory
-/// created by this call is removed again.
+/// created by this call is removed again, and a pre-existing (empty)
+/// directory is emptied of everything this run wrote.
 ///
 /// # Errors
 ///
@@ -98,12 +99,35 @@ pub(crate) fn generate(
             )
         }),
     };
-    if result.is_err() && !target_existed {
+    if result.is_err() {
         // Never leave a half-written project behind.
-        let _ = fs::remove_dir_all(&target);
+        if target_existed {
+            remove_dir_contents(&target);
+        } else {
+            let _ = fs::remove_dir_all(&target);
+        }
     }
     result?;
     Ok(target)
+}
+
+/// Best-effort removal of everything inside `dir`, keeping `dir` itself.
+/// The directory was confirmed empty before generation, so everything in
+/// it came from the failed run.
+fn remove_dir_contents(dir: &Path) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        // `file_type` does not follow symlinks: a link is unlinked, its
+        // target never touched.
+        if entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+            let _ = fs::remove_dir_all(&path);
+        } else {
+            let _ = fs::remove_file(&path);
+        }
+    }
 }
 
 /// Render every step of an embedded plan into its subdirectory.

@@ -1372,6 +1372,48 @@ fn failed_generation_removes_the_half_written_project() {
 }
 
 #[test]
+fn failed_generation_empties_a_preexisting_empty_directory() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let template_dir = tmp.path().join("broken-template");
+    std::fs::create_dir(&template_dir).expect("mkdir");
+    std::fs::write(
+        template_dir.join("template.toml"),
+        "name = \"broken\"\ndescription = \"fails mid-render\"",
+    )
+    .expect("write manifest");
+    std::fs::write(template_dir.join("01-note.txt.j2"), "ok").expect("write file");
+    std::fs::write(template_dir.join("zz-boom.txt.j2"), "{{ nope }}").expect("write file");
+
+    let work = tmp.path().join("work");
+    std::fs::create_dir(&work).expect("mkdir");
+    std::fs::create_dir(work.join("doomed-app")).expect("mkdir empty target");
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "doomed-app",
+            "--kind",
+            "cli",
+            "--template",
+            template_dir.to_str().expect("utf8 path"),
+            "--no-input",
+        ])
+        .current_dir(&work)
+        .assert()
+        .failure();
+
+    let target = work.join("doomed-app");
+    assert!(target.exists(), "the user's own directory stays");
+    assert!(
+        std::fs::read_dir(&target)
+            .expect("read dir")
+            .next()
+            .is_none(),
+        "everything the failed run wrote is gone"
+    );
+}
+
+#[test]
 fn new_into_an_existing_empty_directory_works() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let work = tmp.path().join("work");

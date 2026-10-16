@@ -20,6 +20,12 @@ Buffers compiler: https://grpc.io/docs/protoc-installation/
 {%- endif %}
 
 ## Development
+{%- if backend.database not in ['sqlite', 'sled'] or 'auth' in backend.features %}
+
+```sh
+cp backend/.env.example .env  # {% if backend.database not in ['sqlite', 'sled'] %}set DATABASE_URL{% if 'auth' in backend.features %} and JWT_SECRET{% endif %}{% else %}set JWT_SECRET{% endif %} — the backend refuses to start without it
+```
+{%- endif %}
 
 Two terminals from the workspace root:
 

@@ -68,6 +68,10 @@ Buffers compiler: https://grpc.io/docs/protoc-installation/
 
 ## Development
 
+```sh
+cp backend/.env.example .env  # set DATABASE_URL — the backend refuses to start without it
+```
+
 Two terminals from the workspace root:
 
 ```sh

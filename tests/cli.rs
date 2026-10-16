@@ -1397,3 +1397,78 @@ fn conflicting_flags_are_rejected_before_prompts() {
         .failure()
         .stderr(predicate::str::contains("conflicting options"));
 }
+
+#[test]
+fn yes_generates_the_default_web_stack() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args(["new", "default-app", "--kind", "web", "--yes"])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let project = tmp.path().join("default-app");
+    let manifest = std::fs::read_to_string(project.join("Cargo.toml")).expect("read manifest");
+    assert!(manifest.contains("axum"), "axum is the default backend");
+    assert!(manifest.contains("sqlx"), "sqlx is the default database");
+    assert!(
+        !manifest.contains("dev-dependencies"),
+        "testing/features default to empty"
+    );
+    assert!(
+        project.join("Dockerfile").exists(),
+        "docker is the default deployment"
+    );
+}
+
+#[test]
+fn yes_fills_only_the_gaps_of_a_flag_passed_stack() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args([
+            "new",
+            "gap-app",
+            "--backend",
+            "actix",
+            "--db",
+            "sled",
+            "--yes",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let project = tmp.path().join("gap-app");
+    let manifest = std::fs::read_to_string(project.join("Cargo.toml")).expect("read manifest");
+    assert!(manifest.contains("actix-web"), "flags win over defaults");
+    assert!(manifest.contains("sled"), "flags win over defaults");
+    assert!(
+        project.join("Dockerfile").exists(),
+        "the deployment gap is filled with docker"
+    );
+}
+
+#[test]
+fn yes_still_requires_the_kind() {
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args(["new", "kindless-app", "--yes"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("missing required option `--kind`"));
+}
+
+#[test]
+fn yes_conflicts_with_no_input() {
+    // The two flags disagree on what happens to a gap: defaults or error.
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .args(["new", "both-app", "--kind", "cli", "--yes", "--no-input"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("cannot be used with"));
+}

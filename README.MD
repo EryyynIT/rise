@@ -23,17 +23,14 @@ The binary is called `rise` — the plain name was already taken on crates.io, s
 ## Quick Start (for the impatient)
 
 ```bash
-rise            # interactive wizard
-```
-
-or script it with flags:
-
-```bash
-rise new myapp --kind web --backend axum --deployment docker
+rise new myapp --kind web --yes
 cd myapp && cargo run
 ```
 
-Yes, it's that simple. Prebuilt binaries and shell installers live on the [Releases page](https://github.com/EryyynIT/rise/releases).
+The default stack — Axum + SQLite (a local file, no database server) — runs
+out of the box: no `.env`, no services, `curl http://localhost:3000` answers.
+The interactive wizard is `rise` with no arguments; pick Postgres (`--db sqlx`)
+when you want a real server database.
 
 ## Usage
 
@@ -42,7 +39,7 @@ Three ways to drive it:
 ```bash
 rise                                   # interactive wizard — the main mode
 rise new myapp --kind cli              # hybrid: flags prefill, the wizard asks the gaps
-rise new myapp --kind web --yes        # silent defaults: axum, sqlx, docker, no extras
+rise new myapp --kind web --yes        # silent defaults: axum, sqlite, docker, no extras
 rise new myapp --kind cli --no-input   # fully scripted: missing options are an error, not a question
 ```
 
@@ -54,12 +51,12 @@ Everything the wizard asks is also a flag on `rise new`:
 | `--kind` | `web`, `cli`, `library`, `game`, `embedded` | inferred as `web` when any web flag is passed |
 | `--backend` | `axum`, `actix`, `rocket` | alone → backend-only; with `--frontend` → fullstack |
 | `--frontend` | `yew`, `leptos`, `askama`, `tera`, `minijinja`, `handlebars` | `yew` → WASM SPA (alone) or workspace member (with a backend); `leptos` → trunk-built csr SPA (alone) or a single-crate SSR + hydration app built with cargo-leptos (with a backend); the rest are server-side template engines |
-| `--db` | `sqlx`, `diesel`, `sea-orm`, `sled` | wires a connection module + `.env.example` — sqlx pool, SeaORM connection, Diesel r2d2 pool, sled store; leptos apps get it in their server functions |
+| `--db` | `sqlite`, `sqlx`, `diesel`, `sea-orm`, `sled` | wires a connection module + `.env.example` — `sqlite` is a sqlx pool over a local file (`data/app.db`, created on first run; zero setup, the default); `sqlx` is Postgres over sqlx, SeaORM connection, Diesel r2d2 pool, sled embedded store; leptos apps get it in their server functions |
 | `--deployment` | `docker`, `self-hosted` | `docker` ships a slim multi-stage Dockerfile |
-| `--testing` | `api`, `sqlx` | repeatable, comma-separated; adds test modules and dev-dependencies; with a leptos frontend `api` tests the server function endpoint (run `cargo test --features ssr`); `sqlx` needs `--db sqlx` (it tests the pool) |
+| `--testing` | `api`, `sqlx` | repeatable, comma-separated; adds test modules and dev-dependencies; with a leptos frontend `api` tests the server function endpoint (run `cargo test --features ssr`); `sqlx` needs a sqlx database (`--db sqlx` or `--db sqlite` — it tests the pool; the sqlite pool test runs live on an in-memory database) |
 | `--features` | `web-sockets`, `grpc`, `graph-ql`, `rate-limiting`, `cors`, `auth` | repeatable, comma-separated; `/ws` echo endpoint, tonic gRPC Greeter on :50051 (builds need [protoc](https://grpc.io/docs/protoc-installation/)), async-graphql with GraphiQL at `/graphql`, per-IP rate limiting, permissive CORS (restrict the origin before deploying), JWT auth (`/auth/register` + `/auth/login` + a protected `/api/me`, users in the chosen database, passwords argon2-hashed, tokens signed with `JWT_SECRET` from `.env.example`) — all of them also next to a leptos frontend's routes |
 | `--template` | a template directory | render your own template — see [docs/TEMPLATES.md](docs/TEMPLATES.md) |
-| `--yes` | | fill every gap with the built-in defaults (backend `axum`, db `sqlx`, deployment `docker`, no testing/features) without asking; the name and `--kind` have no defaults |
+| `--yes` | | fill every gap with the built-in defaults (backend `axum`, db `sqlite`, deployment `docker`, no testing/features) without asking; the name and `--kind` have no defaults |
 | `--no-input` | | never prompt; a non-terminal stdin implies this |
 
 What generates today: Axum, Actix Web and Rocket backends, fullstack variants of

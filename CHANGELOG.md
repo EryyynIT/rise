@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `--db sqlite`: an embedded SQLite database over sqlx — a local file at
+  `data/app.db` (created on first run, `/data` gitignored), no database
+  server and no `.env` needed. Wired into every web template: the
+  connection pool, the JWT auth module (sqlite SQL dialect), and the
+  leptos server functions. `--testing sqlx` accepts it; the pool test runs
+  live against an in-memory database instead of being `#[ignore]`d.
+
+### Changed
+
+- **The built-in default database is `sqlite` instead of `sqlx`** —
+  `rise new myapp --kind web --yes` (and an Enter-only interactive run)
+  now generates an Axum app that answers `curl http://localhost:3000`
+  immediately after `cargo run`, with zero external services. The Postgres
+  stacks are unchanged behind `--db sqlx` / `diesel` / `sea-orm`.
+- The "copy `.env.example`" next step is only printed for server
+  databases; embedded databases (sqlite, sled) need no setup.
 - Config file (`~/.config/rise/config.toml`, or `$RISE_CONFIG`): defaults
   for the web wizard — `backend`, `frontend`, `db`, `deployment`,
   `testing`, `features`. Precedence: CLI flag > config > built-in default.

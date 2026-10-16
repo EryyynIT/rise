@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-17
+
 ### Added
 
 - `--db sqlite`: an embedded SQLite database over sqlx — a local file at
@@ -410,7 +412,8 @@ First published release. The package is `rise-cli`; the binary is `rise`.
 - `git init` in the generated project and next-steps hints after generation.
 - Typed errors with clear messages; exit code 130 on abort (Esc/Ctrl+C).
 
-[Unreleased]: https://github.com/EryyynIT/rise/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/EryyynIT/rise/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/EryyynIT/rise/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/EryyynIT/rise/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/EryyynIT/rise/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/EryyynIT/rise/compare/v0.5.0...v0.5.1

@@ -21,3 +21,5 @@ Dockerfile = "backend.deployment != 'docker' or workspace"
 "src/grpc.rs" = "'grpc' not in backend.features"
 # The rate limiting fairing only exists with the feature.
 "src/rate_limit.rs" = "'rate-limiting' not in backend.features"
+# The JWT auth module only exists with the feature.
+"src/auth.rs" = "'auth' not in backend.features"

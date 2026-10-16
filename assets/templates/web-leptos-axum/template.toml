@@ -12,3 +12,5 @@ Dockerfile = "deployment != 'docker'"
 "build.rs" = "'grpc' not in backend.features"
 "proto/hello.proto" = "'grpc' not in backend.features"
 "src/grpc.rs" = "'grpc' not in backend.features"
+# The JWT auth module only exists with the feature.
+"src/auth.rs" = "'auth' not in backend.features"

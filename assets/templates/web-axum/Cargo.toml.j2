@@ -24,6 +24,12 @@ tonic = "0.14"
 tonic-prost = "0.14"
 prost = "0.14"
 {%- endif %}
+{%- if 'auth' in backend.features %}
+argon2 = "0.6"
+# rust_crypto selects the pure-Rust HMAC backend (no ring/aws-lc C builds).
+jsonwebtoken = { version = "11", features = ["rust_crypto"] }
+serde = { version = "1", features = ["derive"] }
+{%- endif %}
 {%- if frontend == 'yew' or 'cors' in backend.features %}
 tower-http = { version = "0.6", features = [{% if frontend == 'yew' %}"fs"{% endif %}{% if frontend == 'yew' and 'cors' in backend.features %}, {% endif %}{% if 'cors' in backend.features %}"cors"{% endif %}] }
 {%- endif %}

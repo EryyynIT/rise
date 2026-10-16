@@ -33,6 +33,9 @@ use std::sync::LazyLock;
 {%- endif %}
 
 mod db;
+{%- if 'auth' in backend.features %}
+mod auth;
+{%- endif %}
 {%- if 'grpc' in backend.features %}
 mod grpc;
 {%- endif %}
@@ -214,6 +217,16 @@ async fn main() -> std::io::Result<()> {
 {%- elif backend.database == 'sled' %}
     let store = db::open().expect("failed to open the database");
 {%- endif %}
+{%- if 'auth' in backend.features and backend.database != 'sled' %}
+    // The users table behind /auth/register and /auth/login.
+{%- if backend.database == 'diesel' %}
+    auth::migrate(&pool);
+{%- elif backend.database == 'sqlx' %}
+    auth::migrate(&pool).await;
+{%- else %}
+    auth::migrate(&conn).await;
+{%- endif %}
+{%- endif %}
 {%- if 'rate-limiting' in backend.features %}
     // Rate limit requests per client IP: bursts of up to 5 requests,
     // then two requests per second on average.
@@ -255,6 +268,13 @@ async fn main() -> std::io::Result<()> {
         // Answer cross-origin requests (and preflights) from any origin.
         // Restrict this to your frontend's origin before deploying.
         let app = app.wrap(Cors::permissive());
+{%- endif %}
+{%- if 'auth' in backend.features %}
+        // JWT auth: /auth/register, /auth/login and a protected /api/me.
+        let app = app
+            .service(auth::register)
+            .service(auth::login)
+            .service(auth::me);
 {%- endif %}
 {%- if 'web-sockets' in backend.features %}
         let app = app.service(ws);

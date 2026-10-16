@@ -1,0 +1,303 @@
+---
+source: src/templates/engine.rs
+expression: "snapshot_output(&backend_spec_full(Backend::Axum, Database::Diesel,\nDeployment::Docker, vec![], vec![Feature::Auth],))"
+---
+=== .dockerignore ===
+# Keep the build context small and secrets out of image layers.
+.git
+/target
+.env
+
+=== .env.example ===
+# Signs the JWTs issued by /auth/login. Change this in production.
+JWT_SECRET=change-me-in-production
+DATABASE_URL=postgres://postgres:postgres@localhost/sample_app
+
+=== .gitignore ===
+/target
+.env
+
+=== Cargo.toml ===
+[package]
+name = "sample-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+# Loads .env (DATABASE_URL & co.) into the environment at startup.
+dotenvy = "0.15"
+argon2 = "0.6"
+# rust_crypto selects the pure-Rust HMAC backend (no ring/aws-lc C builds).
+jsonwebtoken = { version = "11", features = ["rust_crypto"] }
+serde = { version = "1", features = ["derive"] }
+diesel = { version = "2", features = ["postgres", "r2d2"] }
+
+=== Dockerfile ===
+FROM rust:1-slim AS builder
+WORKDIR /app
+# Diesel links against libpq.
+RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev && rm -rf /var/lib/apt/lists/*
+COPY . .
+RUN cargo build --release
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends libpq5 && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /app/target/release/sample-app /usr/local/bin/app
+EXPOSE 3000
+CMD ["app"]
+
+=== src/auth.rs ===
+//! JWT auth: register, log in, and a protected example route.
+//!
+//! Users live in the project's database; passwords are hashed with argon2.
+//! Tokens are signed with `JWT_SECRET` (see `.env.example`).
+
+use argon2::{
+    Argon2,
+    password_hash::{PasswordHasher, PasswordVerifier, phc::PasswordHash},
+};
+use axum::{
+    Json, Router,
+    extract::{FromRequestParts, State},
+    http::{StatusCode, header, request::Parts},
+    routing::{get, post},
+};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation};
+use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
+use diesel::prelude::*;
+
+type Db = crate::db::DbPool;
+
+/// JSON body of the register and login endpoints.
+#[derive(Deserialize)]
+pub struct Credentials {
+    username: String,
+    password: String,
+}
+
+/// The JWT payload: subject = username, exp = 24 hours from issue.
+#[derive(Serialize, Deserialize)]
+struct Claims {
+    sub: String,
+    exp: usize,
+}
+
+static JWT_SECRET: LazyLock<String> =
+    LazyLock::new(|| std::env::var("JWT_SECRET").expect("set JWT_SECRET (see .env.example)"));
+
+diesel::table! {
+    users (id) {
+        id -> Int4,
+        username -> Text,
+        password_hash -> Text,
+    }
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = users)]
+struct NewUser<'a> {
+    username: &'a str,
+    password_hash: &'a str,
+}
+
+/// Create the users table when missing. Called once at startup.
+pub fn migrate(db: &Db) {
+    let mut conn = db.get().expect("database connection");
+    diesel::sql_query(
+        "CREATE TABLE IF NOT EXISTS users (\
+            id SERIAL PRIMARY KEY, \
+            username TEXT NOT NULL UNIQUE, \
+            password_hash TEXT NOT NULL)",
+    )
+    .execute(&mut conn)
+    .expect("failed to create the users table");
+}
+
+/// Insert a user; false when the username is taken. Diesel is blocking:
+/// call this inside `spawn_blocking` (see the handlers below).
+fn create_user(db: &Db, username: &str, password_hash: &str) -> Result<bool, diesel::result::Error> {
+    let mut conn = db.get().expect("database connection");
+    let inserted = diesel::insert_into(users::table)
+        .values(&NewUser {
+            username,
+            password_hash,
+        })
+        .on_conflict_do_nothing()
+        .execute(&mut conn)?;
+    Ok(inserted > 0)
+}
+
+fn password_hash_of(db: &Db, username: &str) -> Result<Option<String>, diesel::result::Error> {
+    let mut conn = db.get().expect("database connection");
+    users::table
+        .filter(users::username.eq(username))
+        .select(users::password_hash)
+        .first(&mut conn)
+        .optional()
+}
+
+/// The auth routes: register, login, and a protected example.
+pub fn routes(db: Db) -> Router {
+    Router::new()
+        .route("/auth/register", post(register))
+        .route("/auth/login", post(login))
+        .route("/api/me", get(me))
+        .with_state(db)
+}
+
+/// Register a new user: 201 Created, 409 Conflict when the name is taken.
+async fn register(State(db): State<Db>, Json(credentials): Json<Credentials>) -> StatusCode {
+    let Ok(password_hash) = hash_password(&credentials.password) else {
+        return StatusCode::INTERNAL_SERVER_ERROR;
+    };
+    let created = tokio::task::spawn_blocking(move || {
+        create_user(&db, &credentials.username, &password_hash)
+    })
+    .await;
+    match created {
+        Ok(Ok(true)) => StatusCode::CREATED,
+        Ok(Ok(false)) => StatusCode::CONFLICT,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+/// Log in: 200 with a signed JWT in the body, 401 on bad credentials.
+async fn login(
+    State(db): State<Db>,
+    Json(credentials): Json<Credentials>,
+) -> Result<String, StatusCode> {
+    let username = credentials.username.clone();
+    let stored = tokio::task::spawn_blocking(move || password_hash_of(&db, &username))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    match stored {
+        Some(hash) if verify_password(&hash, &credentials.password) => {
+            issue_token(&credentials.username).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+        }
+        _ => Err(StatusCode::UNAUTHORIZED),
+    }
+}
+
+/// Protected example: returns the token's subject.
+async fn me(user: AuthUser) -> String {
+    format!("hello, {}", user.0)
+}
+
+/// Extracts the bearer token's subject; 401 when missing or invalid.
+pub struct AuthUser(pub String);
+
+impl<S> FromRequestParts<S> for AuthUser
+where
+    S: Send + Sync,
+{
+    type Rejection = StatusCode;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        parts
+            .headers
+            .get(header::AUTHORIZATION)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.strip_prefix("Bearer "))
+            .and_then(validate_token)
+            .map(|claims| AuthUser(claims.sub))
+            .ok_or(StatusCode::UNAUTHORIZED)
+    }
+}
+
+fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {
+    Ok(Argon2::default()
+        .hash_password(password.as_bytes())?
+        .to_string())
+}
+
+fn verify_password(hash: &str, password: &str) -> bool {
+    PasswordHash::new(hash)
+        .map(|hash| {
+            Argon2::default()
+                .verify_password(password.as_bytes(), &hash)
+                .is_ok()
+        })
+        .unwrap_or(false)
+}
+
+fn issue_token(username: &str) -> Result<String, jsonwebtoken::errors::Error> {
+    let claims = Claims {
+        sub: username.to_owned(),
+        exp: jsonwebtoken::get_current_timestamp() as usize + 24 * 60 * 60,
+    };
+    jsonwebtoken::encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(JWT_SECRET.as_bytes()),
+    )
+}
+
+fn validate_token(token: &str) -> Option<Claims> {
+    jsonwebtoken::decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(JWT_SECRET.as_bytes()),
+        &Validation::default(),
+    )
+    .ok()
+    .map(|data| data.claims)
+}
+
+=== src/db.rs ===
+//! Database connection pool (Diesel + r2d2 + Postgres).
+
+use diesel::{
+    PgConnection,
+    r2d2::{ConnectionManager, Pool},
+};
+
+/// Synchronous Diesel connections, pooled for use from async handlers.
+pub type DbPool = Pool<ConnectionManager<PgConnection>>;
+
+/// Build the pool from the `DATABASE_URL` environment variable.
+///
+/// Copy `.env.example` to `.env` and adjust the URL for your database.
+/// The pool is lazy — it opens connections on first use — so the app
+/// starts without a live database. Diesel is a blocking ORM: run queries
+/// inside `tokio::task::spawn_blocking` (axum) or `web::block` (actix-web).
+pub fn create_pool() -> DbPool {
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let manager = ConnectionManager::<PgConnection>::new(database_url);
+    Pool::builder()
+        .max_size(5)
+        .build(manager)
+        .expect("failed to build the database pool")
+}
+
+=== src/main.rs ===
+use axum::{Router, routing::get};
+
+mod db;
+mod auth;
+
+#[tokio::main]
+async fn main() {
+    // Loads .env when present (DATABASE_URL & co.); absent is fine.
+    let _ = dotenvy::dotenv();
+    let app = Router::new().route("/", get(root));
+    let db = db::create_pool();
+    // The users table behind /auth/register and /auth/login.
+    auth::migrate(&db);
+    let app = app.with_state(db.clone());
+    // JWT auth: /auth/register, /auth/login and a protected /api/me.
+    let app = app.merge(auth::routes(db));
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
+        .await
+        .expect("failed to bind port 3000");
+
+    println!("listening on http://localhost:3000");
+    axum::serve(listener, app).await.expect("server error");
+}
+
+async fn root() -> &'static str {
+    "Hello from sample-app!"
+}

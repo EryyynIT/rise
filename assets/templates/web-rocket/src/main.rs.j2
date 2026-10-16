@@ -37,6 +37,9 @@ use std::sync::LazyLock;
 {%- endif %}
 
 mod db;
+{%- if 'auth' in backend.features %}
+mod auth;
+{%- endif %}
 {%- if 'grpc' in backend.features %}
 mod grpc;
 {%- endif %}
@@ -61,6 +64,14 @@ async fn main() -> Result<(), rocket::Error> {
     let db = db::create_pool();
 {%- elif backend.database == 'sled' %}
     let db = db::open().expect("failed to open the database");
+{%- endif %}
+{%- if 'auth' in backend.features and backend.database != 'sled' %}
+    // The users table behind /auth/register and /auth/login.
+{%- if backend.database == 'diesel' %}
+    auth::migrate(&db);
+{%- else %}
+    auth::migrate(&db).await;
+{%- endif %}
 {%- endif %}
 {%- if 'graph-ql' in backend.features %}
     // The database handle is shared with the GraphQL resolvers as context data.
@@ -93,6 +104,10 @@ async fn main() -> Result<(), rocket::Error> {
 {%- endif %}
 {%- if 'graph-ql' in backend.features %}
     let rocket = rocket.mount("/", routes![graphiql, graphql_query, graphql_request]);
+{%- endif %}
+{%- if 'auth' in backend.features %}
+    // JWT auth: /auth/register, /auth/login and a protected /api/me.
+    let rocket = rocket.mount("/", routes![auth::register, auth::login, auth::me]);
 {%- endif %}
 {%- if 'cors' in backend.features %}
     // Answer cross-origin requests (and preflights) from any origin.

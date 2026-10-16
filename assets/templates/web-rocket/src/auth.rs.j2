@@ -1,0 +1,313 @@
+//! JWT auth: register, log in, and a protected example route.
+//!
+//! Users live in the project's database; passwords are hashed with argon2.
+//! Tokens are signed with `JWT_SECRET` (see `.env.example`).
+
+use argon2::{
+    Argon2,
+    password_hash::{PasswordHasher, PasswordVerifier, phc::PasswordHash},
+};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation};
+use rocket::serde::{Deserialize, Serialize, json::Json};
+use rocket::{Request, State, get, http::Status, post, request::{FromRequest, Outcome}};
+use std::sync::LazyLock;
+{%- if backend.database == 'sqlx' %}
+type Db = sqlx::PgPool;
+{%- elif backend.database == 'sea-orm' %}
+use sea_orm::{ConnectionTrait, DbBackend, Statement};
+
+type Db = sea_orm::DatabaseConnection;
+{%- elif backend.database == 'diesel' %}
+use diesel::prelude::*;
+
+type Db = crate::db::DbPool;
+{%- elif backend.database == 'sled' %}
+type Db = sled::Db;
+{%- endif %}
+
+/// JSON body of the register and login endpoints.
+#[derive(Deserialize)]
+#[serde(crate = "rocket::serde")]
+pub struct Credentials {
+    username: String,
+    password: String,
+}
+
+/// The JWT payload: subject = username, exp = 24 hours from issue.
+#[derive(Serialize, Deserialize)]
+#[serde(crate = "rocket::serde")]
+struct Claims {
+    sub: String,
+    exp: usize,
+}
+
+static JWT_SECRET: LazyLock<String> =
+    LazyLock::new(|| std::env::var("JWT_SECRET").expect("set JWT_SECRET (see .env.example)"));
+{%- if backend.database == 'sqlx' %}
+
+/// Create the users table when missing. Called once at startup.
+pub async fn migrate(db: &Db) {
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS users (\
+            id SERIAL PRIMARY KEY, \
+            username TEXT NOT NULL UNIQUE, \
+            password_hash TEXT NOT NULL)",
+    )
+    .execute(db)
+    .await
+    .expect("failed to create the users table");
+}
+
+/// Insert a user; false when the username is taken.
+async fn create_user(db: &Db, username: &str, password_hash: &str) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query(
+        "INSERT INTO users (username, password_hash) VALUES ($1, $2) \
+         ON CONFLICT (username) DO NOTHING",
+    )
+    .bind(username)
+    .bind(password_hash)
+    .execute(db)
+    .await?;
+    Ok(result.rows_affected() > 0)
+}
+
+async fn password_hash_of(db: &Db, username: &str) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query_scalar("SELECT password_hash FROM users WHERE username = $1")
+        .bind(username)
+        .fetch_optional(db)
+        .await
+}
+{%- elif backend.database == 'sea-orm' %}
+
+/// Create the users table when missing. Called once at startup.
+pub async fn migrate(db: &Db) {
+    db.execute(Statement::from_string(
+        DbBackend::Postgres,
+        "CREATE TABLE IF NOT EXISTS users (\
+            id SERIAL PRIMARY KEY, \
+            username TEXT NOT NULL UNIQUE, \
+            password_hash TEXT NOT NULL)",
+    ))
+    .await
+    .expect("failed to create the users table");
+}
+
+/// Insert a user; false when the username is taken.
+async fn create_user(
+    db: &Db,
+    username: &str,
+    password_hash: &str,
+) -> Result<bool, sea_orm::DbErr> {
+    let result = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "INSERT INTO users (username, password_hash) VALUES ($1, $2) \
+             ON CONFLICT (username) DO NOTHING",
+            [username.into(), password_hash.into()],
+        ))
+        .await?;
+    Ok(result.rows_affected() > 0)
+}
+
+async fn password_hash_of(db: &Db, username: &str) -> Result<Option<String>, sea_orm::DbErr> {
+    db.query_one(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "SELECT password_hash FROM users WHERE username = $1",
+        [username.into()],
+    ))
+    .await?
+    .map(|row| row.try_get::<String>("", "password_hash"))
+    .transpose()
+}
+{%- elif backend.database == 'diesel' %}
+
+diesel::table! {
+    users (id) {
+        id -> Int4,
+        username -> Text,
+        password_hash -> Text,
+    }
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = users)]
+struct NewUser<'a> {
+    username: &'a str,
+    password_hash: &'a str,
+}
+
+/// Create the users table when missing. Called once at startup.
+pub fn migrate(db: &Db) {
+    let mut conn = db.get().expect("database connection");
+    diesel::sql_query(
+        "CREATE TABLE IF NOT EXISTS users (\
+            id SERIAL PRIMARY KEY, \
+            username TEXT NOT NULL UNIQUE, \
+            password_hash TEXT NOT NULL)",
+    )
+    .execute(&mut conn)
+    .expect("failed to create the users table");
+}
+
+/// Insert a user; false when the username is taken. Diesel is blocking:
+/// call this inside `spawn_blocking` (see the handlers below).
+fn create_user(db: &Db, username: &str, password_hash: &str) -> Result<bool, diesel::result::Error> {
+    let mut conn = db.get().expect("database connection");
+    let inserted = diesel::insert_into(users::table)
+        .values(&NewUser {
+            username,
+            password_hash,
+        })
+        .on_conflict_do_nothing()
+        .execute(&mut conn)?;
+    Ok(inserted > 0)
+}
+
+fn password_hash_of(db: &Db, username: &str) -> Result<Option<String>, diesel::result::Error> {
+    let mut conn = db.get().expect("database connection");
+    users::table
+        .filter(users::username.eq(username))
+        .select(users::password_hash)
+        .first(&mut conn)
+        .optional()
+}
+{%- elif backend.database == 'sled' %}
+
+fn users(db: &Db) -> sled::Tree {
+    db.open_tree("users").expect("open the users tree")
+}
+
+/// Insert a user; false when the username is taken.
+fn create_user(db: &Db, username: &str, password_hash: &str) -> Result<bool, sled::Error> {
+    Ok(users(db).insert(username.as_bytes(), password_hash)?.is_none())
+}
+
+fn password_hash_of(db: &Db, username: &str) -> Result<Option<String>, sled::Error> {
+    Ok(users(db)
+        .get(username.as_bytes())?
+        .map(|hash| String::from_utf8_lossy(&hash).into_owned()))
+}
+{%- endif %}
+
+/// Register a new user: 201 Created, 409 Conflict when the name is taken.
+#[post("/auth/register", data = "<credentials>", format = "application/json")]
+pub async fn register(db: &State<Db>, credentials: Json<Credentials>) -> Status {
+    let Ok(password_hash) = hash_password(&credentials.password) else {
+        return Status::InternalServerError;
+    };
+{%- if backend.database == 'diesel' %}
+    let db = db.inner().clone();
+    let username = credentials.username.clone();
+    let created = rocket::tokio::task::spawn_blocking(move || {
+        create_user(&db, &username, &password_hash)
+    })
+    .await;
+    match created {
+        Ok(Ok(true)) => Status::Created,
+        Ok(Ok(false)) => Status::Conflict,
+        _ => Status::InternalServerError,
+    }
+{%- elif backend.database == 'sled' %}
+    match create_user(db.inner(), &credentials.username, &password_hash) {
+        Ok(true) => Status::Created,
+        Ok(false) => Status::Conflict,
+        Err(_) => Status::InternalServerError,
+    }
+{%- else %}
+    match create_user(db.inner(), &credentials.username, &password_hash).await {
+        Ok(true) => Status::Created,
+        Ok(false) => Status::Conflict,
+        Err(_) => Status::InternalServerError,
+    }
+{%- endif %}
+}
+
+/// Log in: 200 with a signed JWT in the body, 401 on bad credentials.
+#[post("/auth/login", data = "<credentials>", format = "application/json")]
+pub async fn login(db: &State<Db>, credentials: Json<Credentials>) -> Result<String, Status> {
+{%- if backend.database == 'diesel' %}
+    let db = db.inner().clone();
+    let username = credentials.username.clone();
+    let stored = rocket::tokio::task::spawn_blocking(move || password_hash_of(&db, &username))
+        .await
+        .map_err(|_| Status::InternalServerError)?
+        .map_err(|_| Status::InternalServerError)?;
+{%- elif backend.database == 'sled' %}
+    let stored = password_hash_of(db.inner(), &credentials.username)
+        .map_err(|_| Status::InternalServerError)?;
+{%- else %}
+    let stored = password_hash_of(db.inner(), &credentials.username)
+        .await
+        .map_err(|_| Status::InternalServerError)?;
+{%- endif %}
+    match stored {
+        Some(hash) if verify_password(&hash, &credentials.password) => {
+            issue_token(&credentials.username).map_err(|_| Status::InternalServerError)
+        }
+        _ => Err(Status::Unauthorized),
+    }
+}
+
+/// Protected example: returns the token's subject.
+#[get("/api/me")]
+pub fn me(user: AuthUser) -> String {
+    format!("hello, {}", user.0)
+}
+
+/// Extracts the bearer token's subject; 401 when missing or invalid.
+pub struct AuthUser(pub String);
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for AuthUser {
+    type Error = ();
+
+    async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
+        match request
+            .headers()
+            .get_one("Authorization")
+            .and_then(|value| value.strip_prefix("Bearer "))
+            .and_then(validate_token)
+        {
+            Some(claims) => Outcome::Success(AuthUser(claims.sub)),
+            None => Outcome::Error((Status::Unauthorized, ())),
+        }
+    }
+}
+
+fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {
+    Ok(Argon2::default()
+        .hash_password(password.as_bytes())?
+        .to_string())
+}
+
+fn verify_password(hash: &str, password: &str) -> bool {
+    PasswordHash::new(hash)
+        .map(|hash| {
+            Argon2::default()
+                .verify_password(password.as_bytes(), &hash)
+                .is_ok()
+        })
+        .unwrap_or(false)
+}
+
+fn issue_token(username: &str) -> Result<String, jsonwebtoken::errors::Error> {
+    let claims = Claims {
+        sub: username.to_owned(),
+        exp: jsonwebtoken::get_current_timestamp() as usize + 24 * 60 * 60,
+    };
+    jsonwebtoken::encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(JWT_SECRET.as_bytes()),
+    )
+}
+
+fn validate_token(token: &str) -> Option<Claims> {
+    jsonwebtoken::decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(JWT_SECRET.as_bytes()),
+        &Validation::default(),
+    )
+    .ok()
+    .map(|data| data.claims)
+}

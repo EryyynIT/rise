@@ -4,7 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+{%- if 'auth' in backend.features %}
+# The "json" feature powers the JSON bodies of the auth endpoints.
+rocket = { version = "0.5", features = ["json"] }
+{%- else %}
 rocket = "0.5"
+{%- endif %}
 # Loads .env (DATABASE_URL & co.) into the environment at startup.
 dotenvy = "0.15"
 {%- if 'web-sockets' in backend.features %}
@@ -21,6 +26,11 @@ async-graphql-rocket = "7"
 tonic = "0.14"
 tonic-prost = "0.14"
 prost = "0.14"
+{%- endif %}
+{%- if 'auth' in backend.features %}
+argon2 = "0.6"
+# rust_crypto selects the pure-Rust HMAC backend (no ring/aws-lc C builds).
+jsonwebtoken = { version = "11", features = ["rust_crypto"] }
 {%- endif %}
 {%- if frontend == 'askama' %}
 askama = "0.16"

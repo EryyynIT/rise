@@ -27,6 +27,12 @@ tonic = { version = "0.14", optional = true }
 tonic-prost = { version = "0.14", optional = true }
 prost = { version = "0.14", optional = true }
 {%- endif %}
+{%- if 'auth' in backend.features %}
+argon2 = { version = "0.6", optional = true }
+# rust_crypto selects the pure-Rust HMAC backend (no ring/aws-lc C builds).
+jsonwebtoken = { version = "11", features = ["rust_crypto"], optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+{%- endif %}
 leptos = { version = "0.8" }
 leptos_meta = { version = "0.8" }
 leptos_actix = { version = "0.8", optional = true }
@@ -67,6 +73,11 @@ ssr = [
     "dep:tonic",
     "dep:tonic-prost",
     "dep:prost",
+    {%- endif %}
+    {%- if 'auth' in backend.features %}
+    "dep:argon2",
+    "dep:jsonwebtoken",
+    "dep:serde",
     {%- endif %}
     "dep:leptos_actix",
     "dep:dotenvy",

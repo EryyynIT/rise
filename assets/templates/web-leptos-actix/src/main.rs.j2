@@ -12,6 +12,11 @@ use async_graphql_actix_web::{GraphQLRequest, GraphQLResponse};
 mod grpc;
 
 {% endif -%}
+{%- if 'auth' in backend.features %}
+#[cfg(feature = "ssr")]
+mod auth;
+
+{% endif -%}
 #[cfg(feature = "ssr")]
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -66,6 +71,15 @@ async fn main() -> std::io::Result<()> {
 {%- elif backend.database == 'sled' %}
     let db = db::open().expect("failed to open the database");
 {%- endif %}
+{%- if 'auth' in backend.features %}
+{%- if backend.database == 'sqlx' or backend.database == 'sea-orm' %}
+    // The users table behind /auth/register and /auth/login.
+    auth::migrate(&db).await;
+{%- elif backend.database == 'diesel' %}
+    // The users table behind /auth/register and /auth/login.
+    auth::migrate(&db);
+{%- endif %}
+{%- endif %}
 
 {%- if 'grpc' in backend.features %}
     // The gRPC API runs on its own port, next to the HTTP server.
@@ -96,6 +110,14 @@ async fn main() -> std::io::Result<()> {
             // origin. Restrict this to your frontend's origin before
             // deploying.
             .wrap(Cors::permissive())
+{%- endif %}
+{%- if 'auth' in backend.features %}
+            // JWT auth: /auth/register, /auth/login and a protected
+            // /api/me. Handlers read the pool from this app_data.
+            .service(auth::register)
+            .service(auth::login)
+            .service(auth::me)
+            .app_data(actix_web::web::Data::new(db.clone()))
 {%- endif %}
             // Serve the compiled JS/WASM/CSS bundle.
             .service(Files::new("/pkg", format!("{site_root}/pkg")))

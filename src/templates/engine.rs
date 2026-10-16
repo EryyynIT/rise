@@ -1830,6 +1830,76 @@ mod tests {
         )));
     }
 
+    // JWT auth: register/login routes + a protected /api/me, users stored
+    // in the spec's database. The axum snapshots pin every storage branch
+    // (sqlx/sea-orm/diesel raw SQL and DDL, sled's tree); the other
+    // templates differ only in the HTTP plumbing.
+    #[test]
+    fn snapshot_web_axum_auth() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Axum,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![],
+            vec![Feature::Auth],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_axum_auth_sea_orm() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Axum,
+            Database::SeaORM,
+            Deployment::Docker,
+            vec![],
+            vec![Feature::Auth],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_axum_auth_diesel() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Axum,
+            Database::Diesel,
+            Deployment::Docker,
+            vec![],
+            vec![Feature::Auth],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_axum_auth_sled() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Axum,
+            Database::Sled,
+            Deployment::Docker,
+            vec![],
+            vec![Feature::Auth],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_auth() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Actix,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![],
+            vec![Feature::Auth],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_rocket_auth() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Rocket,
+            Database::SQLx,
+            Deployment::Docker,
+            vec![],
+            vec![Feature::Auth],
+        )));
+    }
+
     #[test]
     fn snapshot_cli() {
         insta::assert_snapshot!(snapshot_output(&ProjectSpec::CliApp));
@@ -2157,6 +2227,25 @@ mod tests {
             Backend::Actix,
             Frontend::Leptos,
             vec![Feature::Cors],
+        )));
+    }
+
+    // JWT auth next to the leptos routes (ssr-only deps).
+    #[test]
+    fn snapshot_web_axum_fullstack_leptos_auth() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_featured(
+            Backend::Axum,
+            Frontend::Leptos,
+            vec![Feature::Auth],
+        )));
+    }
+
+    #[test]
+    fn snapshot_web_actix_fullstack_leptos_auth() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_featured(
+            Backend::Actix,
+            Frontend::Leptos,
+            vec![Feature::Auth],
         )));
     }
 

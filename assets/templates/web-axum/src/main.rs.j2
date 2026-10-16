@@ -44,6 +44,9 @@ use std::sync::LazyLock;
 {%- endif %}
 
 mod db;
+{%- if 'auth' in backend.features %}
+mod auth;
+{%- endif %}
 {%- if 'grpc' in backend.features %}
 mod grpc;
 {%- endif %}
@@ -72,14 +75,26 @@ async fn main() {
 {%- elif backend.database == 'sled' %}
     let db = db::open().expect("failed to open the database");
 {%- endif %}
+{%- if 'auth' in backend.features and backend.database != 'sled' %}
+    // The users table behind /auth/register and /auth/login.
+{%- if backend.database == 'diesel' %}
+    auth::migrate(&db);
+{%- else %}
+    auth::migrate(&db).await;
+{%- endif %}
+{%- endif %}
 {%- if 'graph-ql' in backend.features %}
     // The database handle is shared with the GraphQL resolvers as context data.
     let schema = Schema::build(QueryRoot, EmptyMutation, EmptySubscription)
-        .data(db)
+        .data(db{%- if 'auth' in backend.features %}.clone(){%- endif %})
         .finish();
     let app = app.with_state(schema);
 {%- else %}
-    let app = app.with_state(db);
+    let app = app.with_state(db{%- if 'auth' in backend.features %}.clone(){%- endif %});
+{%- endif %}
+{%- if 'auth' in backend.features %}
+    // JWT auth: /auth/register, /auth/login and a protected /api/me.
+    let app = app.merge(auth::routes(db));
 {%- endif %}
 {%- if frontend == 'yew' %}
     // Serve the WASM bundle built by trunk (`frontend/dist`) next to the API.

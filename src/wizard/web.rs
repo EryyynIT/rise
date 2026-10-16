@@ -99,61 +99,33 @@ pub(crate) fn complete(flags: WebFlags, mode: Interaction) -> Result<WebAppSpec>
 }
 
 /// The fully interactive web flow, for runs without any web flags.
+/// Only the shape/backend/frontend questions live here; everything else
+/// re-enters [`complete`] so interactive and flag-driven runs share one
+/// question path.
 fn prompt_full() -> Result<WebAppSpec> {
-    match select("Select a webapp kind", WebAppKind::iter().collect())? {
-        WebAppKind::Backend => {
-            let backend = select("Select a backend", implemented_backends())?;
-            Ok(WebAppSpec::Backend(prompt_backend(backend)?))
-        }
-        WebAppKind::Frontend => {
-            let frontend = select("Select a frontend tech", frontend_options(None))?;
-            // Server-side template engines render inside whatever serves them.
-            let deployment = if frontend.is_template_engine() {
-                None
-            } else {
-                Some(select(
-                    "Select a deployment option",
-                    Deployment::iter().collect(),
-                )?)
-            };
-            Ok(WebAppSpec::Frontend(FrontendSpec {
-                frontend,
-                deployment,
-            }))
-        }
+    let (backend, frontend) = match select("Select a webapp kind", WebAppKind::iter().collect())? {
+        WebAppKind::Backend => (
+            Some(select("Select a backend", implemented_backends())?),
+            None,
+        ),
+        WebAppKind::Frontend => (
+            None,
+            Some(select("Select a frontend tech", frontend_options(None))?),
+        ),
         WebAppKind::Fullstack => {
             let backend = select("Select a backend", implemented_backends())?;
             let frontend = select("Select a frontend tech", frontend_options(Some(backend)))?;
-            let backend = prompt_backend(backend)?;
-            Ok(WebAppSpec::Fullstack(FullstackSpec { frontend, backend }))
+            (Some(backend), Some(frontend))
         }
-    }
-}
-
-/// Ask all backend questions, shared by backend-only and fullstack apps.
-///
-/// The database question is asked for a Leptos frontend too — server
-/// functions use the connection.
-fn prompt_backend(backend: Backend) -> Result<BackendSpec> {
-    let database = select("Select a database", Database::iter().collect())?;
-    let deployment = select("Select a deployment option", Deployment::iter().collect())?;
-    let implemented_testing = implemented_testing(database);
-    let testing = multi_select("Select testing options", implemented_testing.clone())?;
-    reject_unavailable(&testing, &implemented_testing, Error::TestingNotAvailable)?;
-    let implemented_features = implemented_features();
-    let features = multi_select("Select features", implemented_features.clone())?;
-    reject_unavailable(
-        &features,
-        &implemented_features,
-        Error::FeaturesNotAvailable,
-    )?;
-    Ok(BackendSpec {
-        backend,
-        database,
-        deployment,
-        testing,
-        features,
-    })
+    };
+    complete(
+        WebFlags {
+            backend,
+            frontend,
+            ..WebFlags::default()
+        },
+        Interaction::Interactive,
+    )
 }
 
 /// Complete the backend spec, asking only for what the flags left open.

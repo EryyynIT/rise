@@ -108,7 +108,7 @@ fn evaluate(
                     Status::Present(String::new())
                 }
                 Some(_) => Status::Missing,
-                None => Status::Unknown("rustup not found"),
+                None => Status::Unknown("could not query rustup"),
             },
         })
         .collect()
@@ -244,7 +244,7 @@ mod tests {
     fn without_rustup_the_targets_are_unknown_not_missing() {
         let statuses = evaluate(CHECKS, &every_version, None);
         let out = report(CHECKS, &statuses);
-        assert!(out.contains("cannot check: rustup not found"));
+        assert!(out.contains("cannot check: could not query rustup"));
         assert!(out.contains("4 of 6 checks passed (2 could not be checked)"));
     }
 }

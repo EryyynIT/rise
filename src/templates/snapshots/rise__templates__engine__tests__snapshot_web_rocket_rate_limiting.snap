@@ -184,7 +184,12 @@ impl Fairing for RateLimit {
     }
 
     async fn on_request(&self, request: &mut Request<'_>, _: &mut Data<'_>) {
-        let Some(ip) = request.client_ip() else {
+        // Key on the real peer, not `client_ip()`: rocket's `ip_header`
+        // config trusts `X-Real-IP` by default, and a direct client can
+        // forge it per request — defeating the limit AND growing the map
+        // without bound. Behind a trusted proxy that strips/overrides the
+        // header, switch this to `request.client_ip()`.
+        let Some(ip) = request.remote().map(|remote| remote.ip()) else {
             return;
         };
         let allowed = self

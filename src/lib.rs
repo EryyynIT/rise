@@ -45,6 +45,7 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
         None => templates::TemplateSource::Embedded,
     };
     let no_git = args.no_git;
+    let verify = args.verify;
     let (name, spec) = wizard::collect(args)?;
     let path = templates::generate(&spec, &name, &source)?;
     if !no_git {
@@ -65,6 +66,9 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
         wasm_frontend && matches!(&spec, ProjectSpec::WebApp(WebAppSpec::Fullstack(_)));
     let leptos_fullstack = matches!(&spec, ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack))
         if fullstack.frontend == Frontend::Leptos);
+    if verify {
+        verify_build(&path, leptos_fullstack)?;
+    }
     let mut out = format!("created ./{}\n\nnext steps:\n  cd {name}\n", path.display());
     let database = match &spec {
         ProjectSpec::WebApp(WebAppSpec::Backend(backend)) => Some(backend.database),
@@ -146,6 +150,30 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
         out.push_str("  docker compose up --build  # the app plus postgres in containers\n");
     }
     print_out(out.as_bytes())
+}
+
+/// `--verify`: `cargo check` the generated project so a broken build
+/// surfaces at scaffolding time, not at the user's first `cargo run`.
+/// Leptos fullstack apps only compile the server entry point with the
+/// ssr feature on. The project stays on disk either way — a failed check
+/// is a broken build, not a failed generation.
+fn verify_build(path: &std::path::Path, leptos_fullstack: bool) -> Result<(), Error> {
+    let mut command = String::from("cargo check");
+    let mut check = std::process::Command::new("cargo");
+    check.arg("check").current_dir(path);
+    if leptos_fullstack {
+        check.args(["--features", "ssr"]);
+        command.push_str(" --features ssr");
+    }
+    eprintln!("verifying the build: {command} (in ./{})", path.display());
+    let status = check.status().map_err(|err| Error::VerifyUnavailable {
+        command: command.clone(),
+        reason: err.to_string(),
+    })?;
+    if !status.success() {
+        return Err(Error::VerifyFailed { command });
+    }
+    Ok(())
 }
 
 /// Initialize a git repository in the new project. Purely best-effort: a

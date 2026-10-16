@@ -83,6 +83,16 @@ pub enum Error {
     #[error("target directory `{0}` already exists and is not empty")]
     TargetNotEmpty(String),
 
+    /// `--verify`: `cargo check` in the generated project failed.
+    #[error(
+        "`{command}` failed in the generated project — it is on disk; fix the build or rerun without --verify"
+    )]
+    VerifyFailed { command: String },
+
+    /// `--verify`: cargo itself would not run (not installed?).
+    #[error("could not run `{command}`: {reason} — is Rust installed? (https://rustup.rs)")]
+    VerifyUnavailable { command: String, reason: String },
+
     /// A filesystem operation failed.
     #[error("filesystem error: {0}")]
     Io(#[from] std::io::Error),

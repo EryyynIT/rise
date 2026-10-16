@@ -112,6 +112,25 @@ fn new_with_no_git_skips_the_repository() {
 }
 
 #[test]
+fn new_with_verify_checks_the_generated_build() {
+    // A library has no dependencies to fetch — the check stays fast and
+    // offline.
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    rise()
+        .args(["new", "verified-lib", "--kind", "library", "--verify"])
+        .current_dir(tmp.path())
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("verifying the build: cargo check"));
+
+    assert!(
+        tmp.path().join("verified-lib/Cargo.toml").exists(),
+        "generation ran"
+    );
+}
+
+#[test]
 fn new_with_diesel_wires_a_connection_pool() {
     let tmp = tempfile::tempdir().expect("tempdir");
 

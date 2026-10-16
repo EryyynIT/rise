@@ -70,6 +70,10 @@ pub(crate) struct NewArgs {
     /// Do not run `git init` in the generated project.
     #[arg(long)]
     pub(crate) no_git: bool,
+
+    /// Run `cargo check` in the generated project to verify it builds.
+    #[arg(long)]
+    pub(crate) verify: bool,
 }
 
 /// Web stack options. `--backend` alone means a backend-only app,

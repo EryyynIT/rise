@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Embedded databases (sqlite, sled) get no compose file: there is no
   second service to orchestrate.
 - `--no-git`: skip the automatic `git init` in the generated project.
+- Every generated project ships a `README.md`: the stack, the run/test
+  commands, the prerequisites (pointing at `rise doctor`), and the Docker
+  section when the project deploys in containers. Workspace members don't
+  repeat it — the workspace root's README already covers them.
 - Config file (`~/.config/rise/config.toml`, or `$RISE_CONFIG`): defaults
   for the web wizard — `backend`, `frontend`, `db`, `deployment`,
   `testing`, `features`. Precedence: CLI flag > config > built-in default.

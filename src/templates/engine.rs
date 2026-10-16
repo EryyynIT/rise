@@ -100,11 +100,16 @@ pub(crate) fn generate(
         }),
     };
     if result.is_err() {
-        // Never leave a half-written project behind.
+        // Never leave a half-written project behind. Best-effort, but not
+        // silent: without the note the next run fails with TargetNotEmpty
+        // and no hint that these are leftovers of the failed one.
         if target_existed {
             remove_dir_contents(&target);
-        } else {
-            let _ = fs::remove_dir_all(&target);
+        } else if fs::remove_dir_all(&target).is_err() && target.exists() {
+            eprintln!(
+                "note: could not clean up {} — remove it manually before retrying",
+                target.display()
+            );
         }
     }
     result?;

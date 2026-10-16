@@ -1602,7 +1602,9 @@ fn new_with_sqlite_runs_without_any_setup() {
         ])
         .current_dir(tmp.path())
         .assert()
-        .success();
+        .success()
+        // Embedded and no auth: nothing in .env.example is required.
+        .stdout(predicate::str::contains("cp .env.example").not());
 
     let project = tmp.path().join("sqlite-app");
     let db_rs = std::fs::read_to_string(project.join("src/db.rs")).expect("read db.rs");
@@ -1611,6 +1613,31 @@ fn new_with_sqlite_runs_without_any_setup() {
     assert!(db_rs.contains("create_dir_all"));
     let gitignore = std::fs::read_to_string(project.join(".gitignore")).expect("read .gitignore");
     assert!(gitignore.contains("/data"));
+}
+
+#[test]
+fn embedded_database_with_auth_still_points_at_env_example() {
+    // sqlite needs no setup, but JWT_SECRET lives in .env.example — the
+    // generated app refuses to start without it, so the hint must stay.
+    rise()
+        .args([
+            "new",
+            "sqlite-auth-app",
+            "--backend",
+            "axum",
+            "--db",
+            "sqlite",
+            "--features",
+            "auth",
+            "--deployment",
+            "self-hosted",
+            "--no-input",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "cp .env.example .env  # set JWT_SECRET",
+        ));
 }
 
 #[test]

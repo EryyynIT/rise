@@ -103,12 +103,18 @@ fn validate_flags(args: &NewArgs) -> Result<()> {
     }
 
     // sqlx-based tests need a sqlx-backed database (postgres or sqlite).
+    // Check only an explicit `--db` flag here: when the database comes from
+    // the config file or the built-in default, this function cannot see it —
+    // `reject_unavailable` in web.rs validates the EFFECTIVE database later.
     let testing_sqlx = web
         .testing
         .as_ref()
         .is_some_and(|testing| testing.contains(&Testing::SQLx));
-    let sqlx_backed = matches!(web.database, Some(Database::SQLx | Database::SQLite));
-    if testing_sqlx && !sqlx_backed {
+    let flag_is_not_sqlx_backed = matches!(
+        web.database,
+        Some(Database::Diesel | Database::SeaORM | Database::Sled)
+    );
+    if testing_sqlx && flag_is_not_sqlx_backed {
         return Err(Error::ConflictingOptions(
             "`--testing sqlx` requires a sqlx database (`--db sqlx` or `--db sqlite`)".into(),
         ));
@@ -354,6 +360,22 @@ mod tests {
             };
             assert!(validate_flags(&args).is_ok(), "database {database}");
         }
+    }
+
+    #[test]
+    fn sqlx_testing_without_a_db_flag_defers_to_the_effective_database() {
+        // No `--db` flag: the database may come from the config file or the
+        // built-in default (both sqlx-backed) — rejecting here would refuse a
+        // valid combination. complete_backend validates the EFFECTIVE one.
+        let args = NewArgs {
+            web: WebFlags {
+                backend: Some(Backend::Axum),
+                testing: Some(vec![Testing::SQLx]),
+                ..WebFlags::default()
+            },
+            ..NewArgs::default()
+        };
+        assert!(validate_flags(&args).is_ok());
     }
 
     #[test]

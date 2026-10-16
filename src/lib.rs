@@ -68,11 +68,18 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
         ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack)) => Some(fullstack.backend.database),
         _ => None,
     };
+    let features: &[Feature] = match &spec {
+        ProjectSpec::WebApp(WebAppSpec::Backend(backend)) => &backend.features,
+        ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack)) => &fullstack.backend.features,
+        _ => &[],
+    };
     if let Some(database) = database
-        && !database.is_embedded()
+        && (!database.is_embedded() || features.contains(&Feature::Auth))
     {
         // Embedded databases (sqlite, sled) run out of the box; a server
-        // database needs its connection URL copied from .env.example.
+        // database needs its connection URL copied from .env.example. Auth
+        // needs JWT_SECRET from that file either way — the generated app
+        // refuses to start without it.
         // In a WASM workspace dotenvy must find the .env from the
         // workspace root (`cargo run -p <name>-backend` runs there):
         // dotenvy searches the working directory and its PARENTS, so a
@@ -83,7 +90,12 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
         } else {
             (".env.example", ".env")
         };
-        out.push_str(&format!("  cp {src} {dst}  # set DATABASE_URL\n"));
+        let comment = match (database.is_embedded(), features.contains(&Feature::Auth)) {
+            (true, true) => "set JWT_SECRET",
+            (false, true) => "set DATABASE_URL and JWT_SECRET",
+            _ => "set DATABASE_URL",
+        };
+        out.push_str(&format!("  cp {src} {dst}  # {comment}\n"));
     }
     if wasm_frontend {
         out.push_str(
@@ -95,11 +107,6 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
             "  rustup target add wasm32-unknown-unknown && cargo install --locked cargo-leptos  # one-time setup\n",
         );
     }
-    let features: &[Feature] = match &spec {
-        ProjectSpec::WebApp(WebAppSpec::Backend(backend)) => &backend.features,
-        ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack)) => &fullstack.backend.features,
-        _ => &[],
-    };
     if features.contains(&Feature::gRPC) {
         out.push_str("  # gRPC builds need protoc: https://grpc.io/docs/protoc-installation/\n");
     }

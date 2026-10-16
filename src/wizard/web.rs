@@ -94,7 +94,7 @@ pub(crate) fn complete(flags: WebFlags, mode: Interaction, config: &Config) -> R
             // `--yes` with no shape flags: the default web app is a
             // backend-only axum service — or whatever stack the config
             // file prescribes; the re-entered flag path applies the
-            // per-option defaults (sqlx, docker, no testing/features).
+            // per-option defaults (sqlite, docker, no testing/features).
             Interaction::Defaults => complete(
                 WebFlags {
                     backend: config.backend.or(Some(Backend::Axum)),

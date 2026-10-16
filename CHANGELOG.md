@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Windows CI: the test workflow now builds and runs the full test suite on
+  `windows-latest` too — the Windows binaries the releases have shipped
+  since 0.1.0 are finally exercised. Line endings are pinned to LF via
+  `.gitattributes` so the embedded templates and snapshots stay
+  byte-identical across platforms; the PTY tests remain unix-only.
+
 ## [0.7.0] - 2026-10-16
 
 ### Added

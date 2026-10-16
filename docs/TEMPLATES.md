@@ -93,6 +93,9 @@ doesn't have that stack (`{% if backend %}...{% endif %}`).
   are rejected.
 - Files render in sorted path order (a `--template` directory is sorted on
   load; embedded templates are ordered at compile time).
+- `--verify` runs `cargo check` on the output — including for `--template`
+  directories, so a custom template should produce a compiling crate; for a
+  leptos fullstack spec the check adds `--features ssr`.
 
 ## Composition
 

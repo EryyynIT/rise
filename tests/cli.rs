@@ -14,6 +14,28 @@ fn list_prints_embedded_templates() {
 }
 
 #[test]
+fn doctor_reports_every_prerequisite() {
+    // The machine this runs on can have any subset of the tools installed,
+    // so the assertions cover the report's structure, not its verdicts.
+    Command::cargo_bin("rise")
+        .expect("binary")
+        .arg("doctor")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("rise doctor"))
+        .stdout(predicate::str::contains("trunk"))
+        .stdout(predicate::str::contains("cargo-leptos"))
+        .stdout(predicate::str::contains("protoc"))
+        .stdout(predicate::str::contains("probe-rs"))
+        .stdout(predicate::str::contains("wasm32-unknown-unknown"))
+        .stdout(predicate::str::contains("thumbv7em-none-eabihf"))
+        .stdout(
+            predicate::str::contains("checks passed")
+                .or(predicate::str::contains("every prerequisite is installed")),
+        );
+}
+
+#[test]
 fn without_tty_missing_name_is_an_actionable_error() {
     // assert_cmd closes stdin by default, so this run is non-interactive
     // even when the test suite itself runs in a terminal.

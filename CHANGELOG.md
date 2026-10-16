@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `--yes`: take the built-in defaults for every option the flags leave out,
+  silently — backend `axum`, database `sqlx`, deployment `docker`, no
+  testing/features. The project name and `--kind` have no defaults and are
+  still required; `--yes` conflicts with `--no-input`, which errors on
+  every gap instead.
+- PTY tests for the interactive wizard: the prompts and exit codes that
+  only a TTY run produces are now pinned — Enter-only answers complete the
+  whole flow and generate the first-option stack, and Esc on the first
+  prompt exits 130 without generating anything.
 - `--backend rocket`: a new `web-rocket` template scaffolds a Rocket 0.5
   backend with the same content depth as the Axum/Actix ones — all four
   databases wired into managed state, `rocket::local::blocking::Client` API

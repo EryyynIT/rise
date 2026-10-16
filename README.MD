@@ -42,6 +42,7 @@ Three ways to drive it:
 ```bash
 rise                                   # interactive wizard — the main mode
 rise new myapp --kind cli              # hybrid: flags prefill, the wizard asks the gaps
+rise new myapp --kind cli --yes        # silent defaults: axum, sqlx, docker, no extras
 rise new myapp --kind cli --no-input   # fully scripted: missing options are an error, not a question
 ```
 
@@ -58,6 +59,7 @@ Everything the wizard asks is also a flag on `rise new`:
 | `--testing` | `api`, `sqlx` | repeatable, comma-separated; adds test modules and dev-dependencies; with a leptos frontend `api` tests the server function endpoint (run `cargo test --features ssr`); `sqlx` needs `--db sqlx` (it tests the pool) |
 | `--features` | `web-sockets`, `grpc`, `graph-ql`, `rate-limiting` | repeatable, comma-separated; `/ws` echo endpoint, tonic gRPC Greeter on :50051 (builds need [protoc](https://grpc.io/docs/protoc-installation/)), async-graphql with GraphiQL at `/graphql`, per-IP rate limiting — all of them also next to a leptos frontend's routes |
 | `--template` | a template directory | render your own template — see [docs/TEMPLATES.md](docs/TEMPLATES.md) |
+| `--yes` | | fill every gap with the built-in defaults (backend `axum`, db `sqlx`, deployment `docker`, no testing/features) without asking; the name and `--kind` have no defaults |
 | `--no-input` | | never prompt; a non-terminal stdin implies this |
 
 What generates today: Axum, Actix Web and Rocket backends, fullstack variants of

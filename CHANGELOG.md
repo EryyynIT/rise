@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Embedded databases (sqlite, sled) get no compose file: there is no
   second service to orchestrate.
 - `--no-git`: skip the automatic `git init` in the generated project.
+- `--verify`: run `cargo check` in the generated project right after
+  scaffolding — a broken build surfaces immediately instead of at the
+  first `cargo run`. The project stays on disk when the check fails.
 - Every generated project ships a `README.md`: the stack, the run/test
   commands, the prerequisites (pointing at `rise doctor`), and the Docker
   section when the project deploys in containers. Workspace members don't

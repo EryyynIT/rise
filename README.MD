@@ -59,6 +59,7 @@ Everything the wizard asks is also a flag on `rise new`:
 | `--yes` | | fill every gap with the built-in defaults (backend `axum`, db `sqlite`, deployment `docker`, no testing/features) without asking; the name and `--kind` have no defaults |
 | `--no-input` | | never prompt; a non-terminal stdin implies this |
 | `--no-git` | | skip the automatic `git init` in the generated project |
+| `--verify` | | run `cargo check` in the generated project, so a broken build surfaces at scaffolding time (`--features ssr` is added for leptos fullstack) |
 
 What generates today: Axum, Actix Web and Rocket backends, fullstack variants of
 all three with the four template engines above, a Yew WASM frontend (a cargo

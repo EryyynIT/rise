@@ -222,6 +222,8 @@ fn implemented_features() -> Vec<Feature> {
         Feature::gRPC,
         Feature::GraphQL,
         Feature::RateLimiting,
+        Feature::Cors,
+        Feature::Auth,
     ]
 }
 

@@ -162,4 +162,6 @@ pub enum Feature {
     #[serde(rename = "graph-ql")]
     GraphQL,
     RateLimiting,
+    Cors,
+    Auth,
 }

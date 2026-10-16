@@ -3,10 +3,24 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
 
+/// A `rise` command isolated from the developer's own config file:
+/// `RISE_CONFIG` points at an empty (but existing) file, so a real
+/// `~/.config/rise/config.toml` can never leak into the assertions.
+fn rise() -> Command {
+    static EMPTY_CONFIG: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+    let path = EMPTY_CONFIG.get_or_init(|| {
+        let path = std::env::temp_dir().join("rise-cli-tests-empty-config.toml");
+        std::fs::write(&path, "").expect("write empty config");
+        path
+    });
+    let mut command = Command::cargo_bin("rise").expect("binary");
+    command.env("RISE_CONFIG", path);
+    command
+}
+
 #[test]
 fn list_prints_embedded_templates() {
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .arg("list")
         .assert()
         .success()
@@ -17,8 +31,7 @@ fn list_prints_embedded_templates() {
 fn doctor_reports_every_prerequisite() {
     // The machine this runs on can have any subset of the tools installed,
     // so the assertions cover the report's structure, not its verdicts.
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .arg("doctor")
         .assert()
         .success()
@@ -39,8 +52,7 @@ fn doctor_reports_every_prerequisite() {
 fn without_tty_missing_name_is_an_actionable_error() {
     // assert_cmd closes stdin by default, so this run is non-interactive
     // even when the test suite itself runs in a terminal.
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .assert()
         .failure()
         .code(1)
@@ -51,8 +63,7 @@ fn without_tty_missing_name_is_an_actionable_error() {
 fn new_generates_backend_project_without_prompts() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "sample-app",
@@ -89,8 +100,7 @@ fn new_generates_backend_project_without_prompts() {
 fn new_with_diesel_wires_a_connection_pool() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "diesel-app",
@@ -124,8 +134,7 @@ fn new_with_diesel_wires_a_connection_pool() {
 fn new_with_testing_adds_test_module_and_dev_dependencies() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "tested-app",
@@ -156,8 +165,7 @@ fn new_with_testing_adds_test_module_and_dev_dependencies() {
 fn new_with_websockets_adds_ws_endpoint() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "ws-app",
@@ -186,8 +194,7 @@ fn new_with_websockets_adds_ws_endpoint() {
 fn new_with_sea_orm_wires_a_connection() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "seaorm-app",
@@ -216,8 +223,7 @@ fn new_with_sea_orm_wires_a_connection() {
 fn new_with_sled_wires_an_embedded_store() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "sled-app",
@@ -249,8 +255,7 @@ fn new_with_sled_wires_an_embedded_store() {
 fn new_with_rate_limiting_adds_governor() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "limited-app",
@@ -280,8 +285,7 @@ fn new_with_rate_limiting_adds_governor() {
 fn new_with_graphql_adds_schema_and_graphiql() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "gql-app",
@@ -312,8 +316,7 @@ fn new_with_graphql_adds_schema_and_graphiql() {
 fn new_with_grpc_generates_a_tonic_service() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "grpc-app",
@@ -351,8 +354,7 @@ fn new_with_grpc_generates_a_tonic_service() {
 fn new_with_cors_adds_a_permissive_cors_layer() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "cors-app",
@@ -381,8 +383,7 @@ fn new_with_cors_adds_a_permissive_cors_layer() {
 fn new_with_auth_generates_jwt_register_login() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "auth-app",
@@ -420,8 +421,7 @@ fn new_with_auth_generates_jwt_register_login() {
 fn new_without_auth_has_no_auth_module() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "plain-app",
@@ -446,8 +446,7 @@ fn new_without_auth_has_no_auth_module() {
 
 #[test]
 fn sqlx_testing_without_sqlx_database_is_rejected() {
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "sample-app",
@@ -470,8 +469,7 @@ fn sqlx_testing_without_sqlx_database_is_rejected() {
 fn new_generates_actix_project_without_prompts() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "sample-actix",
@@ -503,8 +501,7 @@ fn new_generates_actix_project_without_prompts() {
 fn new_generates_rocket_project_without_prompts() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "sample-rocket",
@@ -540,8 +537,7 @@ fn new_generates_rocket_project_without_prompts() {
 fn new_with_rocket_renders_every_feature() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "rocket-kitchen-sink",
@@ -582,8 +578,7 @@ fn new_with_rocket_renders_every_feature() {
 fn new_generates_cli_project_without_prompts() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args(["new", "greeter", "--kind", "cli", "--no-input"])
         .current_dir(tmp.path())
         .assert()
@@ -603,8 +598,7 @@ fn new_generates_cli_project_without_prompts() {
 fn new_generates_library_project_without_prompts() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args(["new", "mathlib", "--kind", "library", "--no-input"])
         .current_dir(tmp.path())
         .assert()
@@ -623,8 +617,7 @@ fn new_generates_library_project_without_prompts() {
 fn new_generates_game_project_without_prompts() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args(["new", "coincatcher", "--kind", "game", "--no-input"])
         .current_dir(tmp.path())
         .assert()
@@ -645,8 +638,7 @@ fn new_generates_game_project_without_prompts() {
 fn new_generates_embedded_project_without_prompts() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args(["new", "blink", "--kind", "embedded", "--no-input"])
         .current_dir(tmp.path())
         .assert()
@@ -671,8 +663,7 @@ fn new_generates_embedded_project_without_prompts() {
 fn new_generates_yew_frontend_without_prompts() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "spa-app",
@@ -711,8 +702,7 @@ fn new_generates_yew_frontend_without_prompts() {
 fn yew_frontend_with_docker_gets_a_static_serving_dockerfile() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "spa-app",
@@ -736,8 +726,7 @@ fn yew_frontend_with_docker_gets_a_static_serving_dockerfile() {
 fn new_generates_leptos_frontend_without_prompts() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "spa-app",
@@ -772,8 +761,7 @@ fn new_generates_leptos_frontend_without_prompts() {
 fn leptos_frontend_with_docker_gets_a_static_serving_dockerfile() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "spa-app",
@@ -796,8 +784,7 @@ fn leptos_frontend_with_docker_gets_a_static_serving_dockerfile() {
 
 #[test]
 fn new_reports_the_missing_flag_when_non_interactive() {
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args(["new", "sample-app", "--backend", "axum", "--no-input"])
         .assert()
         .failure()
@@ -808,8 +795,7 @@ fn new_reports_the_missing_flag_when_non_interactive() {
 fn new_generates_fullstack_project_without_prompts() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "full-app",
@@ -843,8 +829,7 @@ fn new_generates_fullstack_project_without_prompts() {
 fn new_generates_yew_fullstack_workspace_without_prompts() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "wasm-app",
@@ -904,8 +889,7 @@ fn new_generates_yew_fullstack_workspace_without_prompts() {
 fn new_generates_actix_yew_workspace_without_prompts() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "actix-wasm",
@@ -941,8 +925,7 @@ fn new_generates_actix_yew_workspace_without_prompts() {
 fn new_generates_rocket_yew_workspace_without_prompts() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "rocket-wasm",
@@ -980,8 +963,7 @@ fn new_generates_rocket_yew_workspace_without_prompts() {
 
 #[test]
 fn fullstack_with_other_wasm_frontends_is_an_actionable_error() {
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "seed-app",
@@ -1004,8 +986,7 @@ fn fullstack_with_other_wasm_frontends_is_an_actionable_error() {
 fn leptos_with_a_rocket_backend_is_an_actionable_error() {
     // Leptos integrates with axum and actix only. The wizard hides the
     // choice; a flag still reports the template it would have needed.
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "rocket-leptos",
@@ -1028,8 +1009,7 @@ fn leptos_with_a_rocket_backend_is_an_actionable_error() {
 fn new_generates_leptos_axum_fullstack_without_prompts() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "leptos-app",
@@ -1071,8 +1051,7 @@ fn new_generates_leptos_axum_fullstack_without_prompts() {
 fn new_generates_leptos_actix_fullstack_without_prompts() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "leptos-app",
@@ -1105,8 +1084,7 @@ fn new_generates_leptos_actix_fullstack_without_prompts() {
 fn leptos_fullstack_wires_the_database() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "leptos-app",
@@ -1142,8 +1120,7 @@ fn mock_testing_is_rejected_for_every_stack() {
     // No template renders mock content (the generated code has no trait
     // seam to mock), so the option is rejected up front — here on a
     // plain backend.
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "mock-app",
@@ -1167,8 +1144,7 @@ fn mock_testing_is_rejected_for_every_stack() {
     // included.
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "leptos-app",
@@ -1194,8 +1170,7 @@ fn mock_testing_is_rejected_for_every_stack() {
 #[test]
 fn leptos_fullstack_renders_testing_content() {
     let tmp = tempfile::tempdir().expect("tempdir");
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "leptos-app",
@@ -1227,8 +1202,7 @@ fn leptos_fullstack_renders_testing_content() {
 #[test]
 fn leptos_fullstack_renders_web_sockets() {
     let tmp = tempfile::tempdir().expect("tempdir");
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "leptos-app",
@@ -1261,8 +1235,7 @@ fn leptos_fullstack_renders_web_sockets() {
 #[test]
 fn leptos_fullstack_renders_rate_limiting() {
     let tmp = tempfile::tempdir().expect("tempdir");
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "leptos-app",
@@ -1297,8 +1270,7 @@ fn leptos_fullstack_renders_rate_limiting() {
 #[test]
 fn leptos_fullstack_renders_graphql() {
     let tmp = tempfile::tempdir().expect("tempdir");
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "leptos-app",
@@ -1331,8 +1303,7 @@ fn leptos_fullstack_renders_graphql() {
 #[test]
 fn leptos_fullstack_renders_grpc() {
     let tmp = tempfile::tempdir().expect("tempdir");
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "leptos-app",
@@ -1383,8 +1354,7 @@ fn new_with_template_dir_uses_the_custom_template() {
 
     let work = tmp.path().join("work");
     std::fs::create_dir(&work).expect("mkdir");
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "custom-app",
@@ -1406,8 +1376,7 @@ fn new_with_template_dir_uses_the_custom_template() {
 
 #[test]
 fn new_with_missing_template_dir_names_the_path() {
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "custom-app",
@@ -1428,8 +1397,7 @@ fn new_with_missing_template_dir_names_the_path() {
 fn completions_register_for_the_binary_name() {
     // The package is `rise-cli`, but the installed binary is `rise`;
     // completion scripts must register for the binary name.
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args(["completions", "bash"])
         .assert()
         .success()
@@ -1441,8 +1409,7 @@ fn completions_register_for_the_binary_name() {
 fn fish_completions_cover_the_shell_argument() {
     // clap_complete's fish generator skips positional arguments; we append
     // the shell names for `rise completions <shell>` ourselves.
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args(["completions", "fish"])
         .assert()
         .success()
@@ -1468,8 +1435,7 @@ fn failed_generation_removes_the_half_written_project() {
 
     let work = tmp.path().join("work");
     std::fs::create_dir(&work).expect("mkdir");
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "doomed-app",
@@ -1506,8 +1472,7 @@ fn failed_generation_empties_a_preexisting_empty_directory() {
     let work = tmp.path().join("work");
     std::fs::create_dir(&work).expect("mkdir");
     std::fs::create_dir(work.join("doomed-app")).expect("mkdir empty target");
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "doomed-app",
@@ -1539,8 +1504,7 @@ fn new_into_an_existing_empty_directory_works() {
     std::fs::create_dir(&work).expect("mkdir");
     std::fs::create_dir(work.join("empty-app")).expect("mkdir empty target");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args(["new", "empty-app", "--kind", "cli", "--no-input"])
         .current_dir(&work)
         .assert()
@@ -1551,8 +1515,7 @@ fn new_into_an_existing_empty_directory_works() {
 
 #[test]
 fn conflicting_flags_are_rejected_before_prompts() {
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args(["new", "sample-app", "--kind", "cli", "--backend", "axum"])
         .assert()
         .failure()
@@ -1563,8 +1526,7 @@ fn conflicting_flags_are_rejected_before_prompts() {
 fn yes_generates_the_default_web_stack() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args(["new", "default-app", "--kind", "web", "--yes"])
         .current_dir(tmp.path())
         .assert()
@@ -1588,8 +1550,7 @@ fn yes_generates_the_default_web_stack() {
 fn yes_fills_only_the_gaps_of_a_flag_passed_stack() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args([
             "new",
             "gap-app",
@@ -1615,8 +1576,7 @@ fn yes_fills_only_the_gaps_of_a_flag_passed_stack() {
 
 #[test]
 fn yes_still_requires_the_kind() {
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args(["new", "kindless-app", "--yes"])
         .assert()
         .failure()
@@ -1626,10 +1586,126 @@ fn yes_still_requires_the_kind() {
 #[test]
 fn yes_conflicts_with_no_input() {
     // The two flags disagree on what happens to a gap: defaults or error.
-    Command::cargo_bin("rise")
-        .expect("binary")
+    rise()
         .args(["new", "both-app", "--kind", "cli", "--yes", "--no-input"])
         .assert()
         .failure()
         .stderr(predicate::str::contains("cannot be used with"));
+}
+
+/// Write `contents` as a config.toml inside `tmp` and return its path.
+fn write_config(tmp: &tempfile::TempDir, contents: &str) -> std::path::PathBuf {
+    let path = tmp.path().join("config.toml");
+    std::fs::write(&path, contents).expect("write config");
+    path
+}
+
+#[test]
+fn config_file_fills_the_gaps_without_flags() {
+    // The config is a preset: `--kind web` alone generates its stack.
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let config = write_config(
+        &tmp,
+        r#"
+backend = "actix"
+db = "sled"
+deployment = "self-hosted"
+testing = ["api"]
+features = ["cors"]
+"#,
+    );
+    rise()
+        .args(["new", "preset-app", "--kind", "web", "--no-input"])
+        .env("RISE_CONFIG", &config)
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let project = tmp.path().join("preset-app");
+    let manifest = std::fs::read_to_string(project.join("Cargo.toml")).expect("read manifest");
+    assert!(manifest.contains("actix-web"), "backend from config");
+    assert!(manifest.contains("sled"), "db from config");
+    assert!(manifest.contains("actix-cors"), "features from config");
+    assert!(
+        !project.join("Dockerfile").exists(),
+        "self-hosted from config"
+    );
+    let main = std::fs::read_to_string(project.join("src/main.rs")).expect("read main");
+    assert!(main.contains("mod tests"), "testing from config");
+}
+
+#[test]
+fn flags_beat_the_config_file() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let config = write_config(&tmp, "backend = \"actix\"\ndb = \"sled\"\n");
+    rise()
+        .args([
+            "new",
+            "flag-app",
+            "--backend",
+            "axum",
+            "--db",
+            "sqlx",
+            "--deployment",
+            "docker",
+            "--no-input",
+        ])
+        .env("RISE_CONFIG", &config)
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let manifest =
+        std::fs::read_to_string(tmp.path().join("flag-app/Cargo.toml")).expect("read manifest");
+    assert!(manifest.contains("axum"), "the flag wins");
+    assert!(!manifest.contains("actix-web"), "the flag wins");
+}
+
+#[test]
+fn config_file_applies_under_yes() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let config = write_config(&tmp, "backend = \"rocket\"\ndb = \"sled\"\n");
+    rise()
+        .args(["new", "yes-preset", "--kind", "web", "--yes"])
+        .env("RISE_CONFIG", &config)
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let manifest =
+        std::fs::read_to_string(tmp.path().join("yes-preset/Cargo.toml")).expect("read manifest");
+    assert!(manifest.contains("rocket"), "config backend under --yes");
+    assert!(manifest.contains("sled"), "config db under --yes");
+    assert!(
+        tmp.path().join("yes-preset/Dockerfile").exists(),
+        "the built-in default fills what the config leaves open"
+    );
+}
+
+#[test]
+fn a_broken_config_file_is_an_error_naming_the_path() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let config = write_config(&tmp, "bakend = \"axum\"\n");
+    rise()
+        .args(["new", "any-app", "--kind", "cli"])
+        .env("RISE_CONFIG", &config)
+        .current_dir(tmp.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("invalid config file"))
+        .stderr(predicate::str::contains("config.toml"));
+}
+
+#[test]
+fn a_missing_rise_config_path_is_an_error() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let missing = tmp.path().join("no-such-config.toml");
+    rise()
+        .args(["new", "any-app", "--kind", "cli"])
+        .env("RISE_CONFIG", &missing)
+        .current_dir(tmp.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("invalid config file"))
+        .stderr(predicate::str::contains("no-such-config.toml"));
 }

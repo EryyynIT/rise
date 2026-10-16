@@ -26,9 +26,13 @@ use expectrl::{
 const ENTER: &[u8] = b"\r";
 
 /// Spawn bare `rise` inside `dir`, attached to a pty (80x24 by default).
+/// `RISE_CONFIG` points at an empty file: the interactive prompts must
+/// come from the binary alone, never from a developer's own config.
 fn rise_in(dir: &Path) -> OsSession {
+    let empty_config = dir.join("empty-config.toml");
+    std::fs::write(&empty_config, "").expect("write empty config");
     let mut command = Command::new(env!("CARGO_BIN_EXE_rise"));
-    command.current_dir(dir);
+    command.current_dir(dir).env("RISE_CONFIG", &empty_config);
     expectrl::Session::spawn(command).expect("spawn rise under a pty")
 }
 

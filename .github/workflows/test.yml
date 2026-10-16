@@ -39,3 +39,8 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+    - name: Smoke-test a generated project
+      # Snapshots pin the generated text; only an actual cargo check proves
+      # the dependency versions in the templates still compile together.
+      shell: bash
+      run: ./target/debug/rise new smoke-app --kind web --yes --verify

@@ -2,6 +2,9 @@
 source: src/templates/engine.rs
 expression: "snapshot_output(&ProjectSpec::Game)"
 ---
+=== .gitignore ===
+/target
+
 === Cargo.toml ===
 [package]
 name = "sample-app"

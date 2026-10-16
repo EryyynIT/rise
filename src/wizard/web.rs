@@ -39,24 +39,27 @@ struct BackendDraft {
 ///
 /// [`Error::MissingOptions`] when a required option is missing in a
 /// non-interactive run, [`Error::Aborted`]/[`Error::Prompt`] from prompts.
-pub(crate) fn complete(flags: WebFlags, mode: Interaction, config: &Config) -> Result<WebAppSpec> {
-    let WebFlags {
-        backend,
-        frontend,
-        database,
-        deployment,
-        testing,
-        features,
-    } = flags;
+pub(crate) fn complete(
+    mut flags: WebFlags,
+    mode: Interaction,
+    config: &Config,
+) -> Result<WebAppSpec> {
+    // Outside interactive mode the config file's values merge in below the
+    // flags, so the shape and the contradiction checks see one effective
+    // view. Interactive runs keep them as prompt preselections instead —
+    // a preset is an offered answer, not a silent one.
+    if mode != Interaction::Interactive {
+        flags = flags.merged_with(config);
+    }
 
-    match (backend, frontend) {
+    match (flags.backend, flags.frontend) {
         (Some(backend), frontend) => {
             // `--deployment` describes the backend whenever one exists.
             let draft = BackendDraft {
-                database,
-                deployment,
-                testing,
-                features,
+                database: flags.database,
+                deployment: flags.deployment,
+                testing: flags.testing,
+                features: flags.features,
             };
             let backend = complete_backend(backend, draft, mode, config)?;
             Ok(match frontend {
@@ -71,7 +74,7 @@ pub(crate) fn complete(flags: WebFlags, mode: Interaction, config: &Config) -> R
                 None
             } else {
                 Some(fill(
-                    deployment,
+                    flags.deployment,
                     config.deployment,
                     mode,
                     "`--deployment`",
@@ -92,53 +95,54 @@ pub(crate) fn complete(flags: WebFlags, mode: Interaction, config: &Config) -> R
         }
         (None, None) => match mode {
             // `--yes` with no shape flags: the default web app is a
-            // backend-only axum service — or whatever stack the config
-            // file prescribes; the re-entered flag path applies the
-            // per-option defaults (sqlite, docker, no testing/features).
+            // backend-only axum service; the re-entered flag path applies
+            // the per-option defaults (sqlite, docker, no testing/features).
+            // A config file's backend/frontend already merged in above.
             Interaction::Defaults => complete(
                 WebFlags {
-                    backend: config.backend.or(Some(Backend::Axum)),
-                    ..config_flags(config)
+                    backend: Some(Backend::Axum),
+                    ..flags
                 },
                 mode,
                 config,
             ),
-            // A config file that names a backend or frontend is a preset:
-            // it fills the shape, not just the options. Without one the
-            // shape stays required.
-            Interaction::NonInteractive
-                if config.backend.is_some() || config.frontend.is_some() =>
-            {
-                complete(config_flags(config), mode, config)
-            }
             Interaction::NonInteractive => Err(Error::MissingOptions(
                 "`--backend` and/or `--frontend` (the config file can set them too)".into(),
             )),
             // No web flags at all: ask everything.
-            Interaction::Interactive => prompt_full(config),
+            Interaction::Interactive => prompt_full(flags, config),
         },
     }
 }
 
-/// The config file's values in the shape of flags, for the no-shape-flag
-/// paths that re-enter [`complete`]. Empty selections stay `None` so the
-/// per-option defaults still apply below them.
-fn config_flags(config: &Config) -> WebFlags {
-    WebFlags {
-        backend: config.backend,
-        frontend: config.frontend,
-        database: config.database,
-        deployment: config.deployment,
-        testing: (!config.testing.is_empty()).then(|| config.testing.clone()),
-        features: (!config.features.is_empty()).then(|| config.features.clone()),
+impl WebFlags {
+    /// The wizard's effective options: flags win, the config file fills the
+    /// gaps. Empty config selections count as absent so the per-option
+    /// defaults still apply below them.
+    pub(crate) fn merged_with(&self, config: &Config) -> WebFlags {
+        WebFlags {
+            backend: self.backend.or(config.backend),
+            frontend: self.frontend.or(config.frontend),
+            database: self.database.or(config.database),
+            deployment: self.deployment.or(config.deployment),
+            testing: self
+                .testing
+                .clone()
+                .or_else(|| (!config.testing.is_empty()).then(|| config.testing.clone())),
+            features: self
+                .features
+                .clone()
+                .or_else(|| (!config.features.is_empty()).then(|| config.features.clone())),
+        }
     }
 }
 
-/// The fully interactive web flow, for runs without any web flags.
+/// The fully interactive web flow, for runs without any shape flags.
 /// Only the shape/backend/frontend questions live here; everything else
 /// re-enters [`complete`] so interactive and flag-driven runs share one
-/// question path. Config values preselect the answers.
-fn prompt_full(config: &Config) -> Result<WebAppSpec> {
+/// question path. Config values preselect the answers; the incoming flags
+/// (databases, features, ...) ride along into the re-entry.
+fn prompt_full(flags: WebFlags, config: &Config) -> Result<WebAppSpec> {
     let (backend, frontend) = match select("Select a webapp kind", WebAppKind::iter().collect())? {
         WebAppKind::Backend => (
             Some(select_with_default(
@@ -174,7 +178,7 @@ fn prompt_full(config: &Config) -> Result<WebAppSpec> {
         WebFlags {
             backend,
             frontend,
-            ..WebFlags::default()
+            ..flags
         },
         Interaction::Interactive,
         config,
@@ -610,18 +614,22 @@ mod tests {
     }
 
     #[test]
-    fn a_config_frontend_makes_yes_fullstack() {
+    fn a_config_frontend_makes_yes_a_frontend_spa() {
+        // One shape rule for every non-interactive mode: a config frontend
+        // alone means a frontend-only SPA, under `--yes` as much as under
+        // `--no-input` (the audit caught `--yes` forcing a backend in).
+        // The axum fallback applies only when nothing names a shape.
         let config = Config {
             frontend: Some(Frontend::Yew),
             ..Config::default()
         };
         let spec =
             complete(WebFlags::default(), Interaction::Defaults, &config).expect("config defaults");
-        let WebAppSpec::Fullstack(fullstack) = spec else {
-            panic!("a config frontend turns `--yes` fullstack");
+        let WebAppSpec::Frontend(frontend) = spec else {
+            panic!("a config frontend fills the shape by itself");
         };
-        assert_eq!(fullstack.frontend, Frontend::Yew);
-        assert_eq!(fullstack.backend.backend, Backend::Axum);
+        assert_eq!(frontend.frontend, Frontend::Yew);
+        assert_eq!(frontend.deployment, Some(Deployment::Docker));
     }
 
     #[test]

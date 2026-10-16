@@ -38,7 +38,10 @@ pub(crate) enum Interaction {
 /// missing in a non-interactive or `--yes` run, [`Error::Aborted`]
 /// /[`Error::Prompt`] from prompts.
 pub(crate) fn collect(args: NewArgs) -> Result<(ProjectName, ProjectSpec)> {
-    validate_flags(&args)?;
+    // Wizard defaults from the user's config file; flags still win over
+    // them. A broken file fails the run with the path named.
+    let config = crate::config::load()?.unwrap_or_default();
+    validate_flags(&args, &config)?;
 
     let mode = if args.yes {
         // `--yes` never asks, on a terminal or not.
@@ -51,10 +54,6 @@ pub(crate) fn collect(args: NewArgs) -> Result<(ProjectName, ProjectSpec)> {
     let NewArgs {
         name, kind, web, ..
     } = args;
-
-    // Wizard defaults from the user's config file; flags still win over
-    // them. A broken file fails the run with the path named.
-    let config = crate::config::load()?.unwrap_or_default();
 
     let name = match name {
         Some(name) => name,
@@ -71,20 +70,22 @@ pub(crate) fn collect(args: NewArgs) -> Result<(ProjectName, ProjectSpec)> {
     Ok((name, spec))
 }
 
-/// Reject contradictory flag combinations before any prompt runs.
-fn validate_flags(args: &NewArgs) -> Result<()> {
-    let web = &args.web;
-
-    if web.any_set() && args.kind.is_some_and(|kind| kind != ProjectKind::WebApp) {
+/// Reject contradictory options before any prompt runs. Contradictions are
+/// checked on the EFFECTIVE options — the flags merged over the config file
+/// — so both sources obey one rule set; only the kind conflict looks at the
+/// raw flags (a config preset must not break `rise new x --kind cli`).
+fn validate_flags(args: &NewArgs, config: &crate::config::Config) -> Result<()> {
+    if args.web.any_set() && args.kind.is_some_and(|kind| kind != ProjectKind::WebApp) {
         return Err(Error::ConflictingOptions(
             "web stack flags require `--kind web` (or drop `--kind`: it is inferred)".into(),
         ));
     }
 
+    let web = args.web.merged_with(config);
     if web.backend.is_none() {
         if web.database.is_some() || web.testing.is_some() || web.features.is_some() {
             return Err(Error::ConflictingOptions(
-                "`--db`, `--testing` and `--features` require `--backend`".into(),
+                "`--db`, `--testing` and `--features` require `--backend` (or a backend in the config file)".into(),
             ));
         }
         match (web.deployment, web.frontend) {
@@ -100,21 +101,31 @@ fn validate_flags(args: &NewArgs) -> Result<()> {
             }
             _ => {}
         }
+        // A template engine renders inside a backend; without one the
+        // combination can never generate — say so instead of pretending
+        // the template is merely "not available yet".
+        if let Some(frontend) = web.frontend
+            && frontend.is_template_engine()
+        {
+            return Err(Error::ConflictingOptions(format!(
+                "`--frontend {frontend}` renders inside a backend — pass `--backend` too"
+            )));
+        }
     }
 
     // sqlx-based tests need a sqlx-backed database (postgres or sqlite).
-    // Check only an explicit `--db` flag here: when the database comes from
-    // the config file or the built-in default, this function cannot see it —
-    // `reject_unavailable` in web.rs validates the EFFECTIVE database later.
+    // With no database flag or config value the built-in default (sqlite,
+    // sqlx-backed) applies, so only an explicit non-sqlx database is a
+    // conflict here; complete_backend validates the effective one.
     let testing_sqlx = web
         .testing
         .as_ref()
         .is_some_and(|testing| testing.contains(&Testing::SQLx));
-    let flag_is_not_sqlx_backed = matches!(
+    let not_sqlx_backed = matches!(
         web.database,
         Some(Database::Diesel | Database::SeaORM | Database::Sled)
     );
-    if testing_sqlx && flag_is_not_sqlx_backed {
+    if testing_sqlx && not_sqlx_backed {
         return Err(Error::ConflictingOptions(
             "`--testing sqlx` requires a sqlx database (`--db sqlx` or `--db sqlite`)".into(),
         ));
@@ -232,6 +243,7 @@ pub(crate) fn multi_select_with_default<T: Display + PartialEq>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Config;
     use crate::spec::{Backend, Database, Deployment, Feature, Frontend};
 
     #[test]
@@ -245,7 +257,7 @@ mod tests {
             ..NewArgs::default()
         };
         assert!(matches!(
-            validate_flags(&args),
+            validate_flags(&args, &Config::default()),
             Err(Error::ConflictingOptions(_))
         ));
     }
@@ -261,7 +273,7 @@ mod tests {
             ..NewArgs::default()
         };
         assert!(matches!(
-            validate_flags(&args),
+            validate_flags(&args, &Config::default()),
             Err(Error::ConflictingOptions(_))
         ));
     }
@@ -276,7 +288,7 @@ mod tests {
             ..NewArgs::default()
         };
         assert!(matches!(
-            validate_flags(&args),
+            validate_flags(&args, &Config::default()),
             Err(Error::ConflictingOptions(_))
         ));
     }
@@ -292,7 +304,7 @@ mod tests {
             ..NewArgs::default()
         };
         assert!(matches!(
-            validate_flags(&args),
+            validate_flags(&args, &Config::default()),
             Err(Error::ConflictingOptions(_))
         ));
     }
@@ -307,7 +319,56 @@ mod tests {
             },
             ..NewArgs::default()
         };
-        assert!(validate_flags(&args).is_ok());
+        assert!(validate_flags(&args, &Config::default()).is_ok());
+    }
+
+    #[test]
+    fn a_config_backend_satisfies_the_backend_requirement() {
+        // The flag says --db, the config file says backend: the merged
+        // view has a backend, so this must not be a conflict.
+        let args = NewArgs {
+            web: WebFlags {
+                database: Some(Database::Sled),
+                ..WebFlags::default()
+            },
+            ..NewArgs::default()
+        };
+        let config = Config {
+            backend: Some(Backend::Axum),
+            ..Config::default()
+        };
+        assert!(validate_flags(&args, &config).is_ok());
+    }
+
+    #[test]
+    fn config_features_without_any_backend_conflict() {
+        // Same rule as flags: features without a backend are dropped
+        // silently by every template, so refuse them loudly.
+        let config = Config {
+            frontend: Some(Frontend::Yew),
+            features: vec![Feature::Cors],
+            ..Config::default()
+        };
+        assert!(matches!(
+            validate_flags(&NewArgs::default(), &config),
+            Err(Error::ConflictingOptions(_))
+        ));
+    }
+
+    #[test]
+    fn a_template_engine_frontend_requires_a_backend() {
+        let args = NewArgs {
+            web: WebFlags {
+                frontend: Some(Frontend::Tera),
+                ..WebFlags::default()
+            },
+            ..NewArgs::default()
+        };
+        let Err(Error::ConflictingOptions(message)) = validate_flags(&args, &Config::default())
+        else {
+            panic!("a bare template engine must be rejected");
+        };
+        assert!(message.contains("pass `--backend` too"), "{message}");
     }
 
     #[test]
@@ -326,7 +387,7 @@ mod tests {
             },
             ..NewArgs::default()
         };
-        assert!(validate_flags(&args).is_ok());
+        assert!(validate_flags(&args, &Config::default()).is_ok());
     }
 
     #[test]
@@ -341,7 +402,7 @@ mod tests {
             ..NewArgs::default()
         };
         assert!(matches!(
-            validate_flags(&args),
+            validate_flags(&args, &Config::default()),
             Err(Error::ConflictingOptions(_))
         ));
     }
@@ -358,7 +419,10 @@ mod tests {
                 },
                 ..NewArgs::default()
             };
-            assert!(validate_flags(&args).is_ok(), "database {database}");
+            assert!(
+                validate_flags(&args, &Config::default()).is_ok(),
+                "database {database}"
+            );
         }
     }
 
@@ -375,7 +439,7 @@ mod tests {
             },
             ..NewArgs::default()
         };
-        assert!(validate_flags(&args).is_ok());
+        assert!(validate_flags(&args, &Config::default()).is_ok());
     }
 
     #[test]

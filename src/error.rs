@@ -29,10 +29,10 @@ pub enum Error {
     #[error("invalid project name `{name}`: {reason}")]
     InvalidProjectName { name: String, reason: &'static str },
 
-    /// A non-interactive run is missing a required option.
-    #[error(
-        "missing required option {0} in a non-interactive run; pass the flag or run interactively"
-    )]
+    /// A run without prompts (`--no-input`, a non-terminal stdin, or
+    /// `--yes`) is missing an option that has no default. `--yes` fills
+    /// option defaults but still requires the project name and `--kind`.
+    #[error("missing required option {0}; pass the flag or run interactively")]
     MissingOptions(String),
 
     /// CLI flags contradict each other.

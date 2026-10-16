@@ -53,6 +53,13 @@ pub(crate) struct NewArgs {
     #[arg(long, value_name = "DIR")]
     pub(crate) template: Option<PathBuf>,
 
+    /// Take the built-in defaults for every option the flags leave out,
+    /// without asking anything (backend `axum`, database `sqlx`,
+    /// deployment `docker`, no testing/features). The project name and
+    /// `--kind` have no defaults and are still required.
+    #[arg(long, conflicts_with = "no_input")]
+    pub(crate) yes: bool,
+
     /// Do not ask any questions; missing options become an error.
     #[arg(long)]
     pub(crate) no_input: bool,

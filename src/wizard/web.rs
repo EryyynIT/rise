@@ -65,9 +65,13 @@ pub(crate) fn complete(flags: WebFlags, mode: Interaction) -> Result<WebAppSpec>
             let deployment = if frontend.is_template_engine() {
                 None
             } else {
-                Some(fill(deployment, mode, "`--deployment`", || {
-                    select("Select a deployment option", Deployment::iter().collect())
-                })?)
+                Some(fill(
+                    deployment,
+                    mode,
+                    "`--deployment`",
+                    Deployment::Docker,
+                    || select("Select a deployment option", Deployment::iter().collect()),
+                )?)
             };
             Ok(WebAppSpec::Frontend(FrontendSpec {
                 frontend,
@@ -75,6 +79,16 @@ pub(crate) fn complete(flags: WebFlags, mode: Interaction) -> Result<WebAppSpec>
             }))
         }
         (None, None) => match mode {
+            // `--yes` with no shape flags: the default web app is a
+            // backend-only axum service; the flag path applies the
+            // per-option defaults (sqlx, docker, no testing/features).
+            Interaction::Defaults => complete(
+                WebFlags {
+                    backend: Some(Backend::Axum),
+                    ..WebFlags::default()
+                },
+                mode,
+            ),
             Interaction::NonInteractive => Err(Error::MissingOptions(
                 "`--backend` and/or `--frontend`".into(),
             )),
@@ -150,12 +164,16 @@ fn complete_backend(
     draft: BackendDraft,
     mode: Interaction,
 ) -> Result<BackendSpec> {
-    let database = fill(draft.database, mode, "`--db`", || {
+    let database = fill(draft.database, mode, "`--db`", Database::SQLx, || {
         select("Select a database", Database::iter().collect())
     })?;
-    let deployment = fill(draft.deployment, mode, "`--deployment`", || {
-        select("Select a deployment option", Deployment::iter().collect())
-    })?;
+    let deployment = fill(
+        draft.deployment,
+        mode,
+        "`--deployment`",
+        Deployment::Docker,
+        || select("Select a deployment option", Deployment::iter().collect()),
+    )?;
     let implemented_testing = implemented_testing(database);
     let testing = fill_multi(draft.testing, mode, || {
         multi_select("Select testing options", implemented_testing.clone())
@@ -235,21 +253,25 @@ fn implemented_features() -> Vec<Feature> {
     ]
 }
 
-/// Take the flag value, ask for it, or report it missing.
+/// Take the flag value, the `--yes` default, ask for it, or report it
+/// missing. The default applies only in [`Interaction::Defaults`].
 fn fill<T: Copy>(
     flag: Option<T>,
     mode: Interaction,
     name: &'static str,
+    default: T,
     ask: impl FnOnce() -> Result<T>,
 ) -> Result<T> {
     match (flag, mode) {
         (Some(value), _) => Ok(value),
         (None, Interaction::Interactive) => ask(),
+        (None, Interaction::Defaults) => Ok(default),
         (None, Interaction::NonInteractive) => Err(Error::MissingOptions(name.into())),
     }
 }
 
-/// Multi-value flags are optional: a non-interactive run leaves them empty.
+/// Multi-value flags are optional: a `--yes` or non-interactive run leaves
+/// them empty.
 fn fill_multi<T>(
     flag: Option<Vec<T>>,
     mode: Interaction,
@@ -258,7 +280,7 @@ fn fill_multi<T>(
     match (flag, mode) {
         (Some(values), _) => Ok(values),
         (None, Interaction::Interactive) => ask(),
-        (None, Interaction::NonInteractive) => Ok(Vec::new()),
+        (None, Interaction::Defaults | Interaction::NonInteractive) => Ok(Vec::new()),
     }
 }
 
@@ -296,6 +318,77 @@ mod tests {
     }
 
     #[test]
+    fn yes_defaults_build_the_default_stack() {
+        // `--kind web --yes` with no shape flags: backend-only axum, and
+        // the per-option defaults behind it.
+        let spec = complete(WebFlags::default(), Interaction::Defaults).expect("defaults");
+        let WebAppSpec::Backend(backend) = spec else {
+            panic!("backend-only is the default shape");
+        };
+        assert_eq!(backend.backend, Backend::Axum);
+        assert_eq!(backend.database, Database::SQLx);
+        assert_eq!(backend.deployment, Deployment::Docker);
+        assert!(backend.testing.is_empty());
+        assert!(backend.features.is_empty());
+    }
+
+    #[test]
+    fn yes_defaults_fill_the_rest_of_a_flag_passed_stack() {
+        // Flags win over defaults; only the gaps are filled.
+        let spec = complete(
+            WebFlags {
+                backend: Some(Backend::Actix),
+                database: Some(Database::Sled),
+                ..WebFlags::default()
+            },
+            Interaction::Defaults,
+        )
+        .expect("defaults");
+        let WebAppSpec::Backend(backend) = spec else {
+            panic!("backend-only shape");
+        };
+        assert_eq!(backend.backend, Backend::Actix);
+        assert_eq!(backend.database, Database::Sled);
+        assert_eq!(backend.deployment, Deployment::Docker);
+        assert!(backend.testing.is_empty());
+    }
+
+    #[test]
+    fn yes_defaults_give_a_yew_frontend_docker() {
+        let spec = complete(
+            WebFlags {
+                frontend: Some(Frontend::Yew),
+                ..WebFlags::default()
+            },
+            Interaction::Defaults,
+        )
+        .expect("defaults");
+        let WebAppSpec::Frontend(frontend) = spec else {
+            panic!("frontend-only shape");
+        };
+        assert_eq!(frontend.frontend, Frontend::Yew);
+        assert_eq!(frontend.deployment, Some(Deployment::Docker));
+    }
+
+    #[test]
+    fn yes_defaults_leave_a_template_engine_without_deployment() {
+        // `--deployment` is not just defaulted to None for template
+        // engines — it is not a valid option there at all.
+        let spec = complete(
+            WebFlags {
+                frontend: Some(Frontend::Askama),
+                ..WebFlags::default()
+            },
+            Interaction::Defaults,
+        )
+        .expect("defaults");
+        let WebAppSpec::Frontend(frontend) = spec else {
+            panic!("frontend-only shape");
+        };
+        assert_eq!(frontend.deployment, None);
+    }
+
+    #[test]
     fn frontend_options_with_backend() {
         let options = frontend_options(Some(Backend::Axum));
         assert!(options.contains(&Frontend::Yew));
@@ -330,10 +423,24 @@ mod tests {
             Some(Database::Diesel),
             Interaction::Interactive,
             "`--db`",
+            Database::SQLx,
             || panic!("must not ask when the flag is set"),
         )
         .expect("flag value");
         assert_eq!(value, Database::Diesel);
+    }
+
+    #[test]
+    fn fill_takes_the_default_under_yes() {
+        let value = fill(
+            None,
+            Interaction::Defaults,
+            "`--db`",
+            Database::SQLx,
+            || unreachable!(),
+        )
+        .expect("default value");
+        assert_eq!(value, Database::SQLx);
     }
 
     #[test]
@@ -342,6 +449,7 @@ mod tests {
             None,
             Interaction::NonInteractive,
             "`--db`",
+            Database::SQLx,
             || unreachable!(),
         );
         assert!(matches!(result, Err(Error::MissingOptions(_))));

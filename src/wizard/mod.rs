@@ -22,6 +22,9 @@ use crate::wizard::render::render_cfg;
 pub(crate) enum Interaction {
     /// Missing options are prompted for.
     Interactive,
+    /// Missing options take their built-in defaults (`--yes`); nothing is
+    /// asked regardless of the terminal.
+    Defaults,
     /// Missing options become [`Error::MissingOptions`].
     NonInteractive,
 }
@@ -31,12 +34,16 @@ pub(crate) enum Interaction {
 /// # Errors
 ///
 /// [`Error::ConflictingOptions`] on contradictory flags,
-/// [`Error::MissingOptions`] when a required option is missing in a
-/// non-interactive run, [`Error::Aborted`]/[`Error::Prompt`] from prompts.
+/// [`Error::MissingOptions`] when a required option without a default is
+/// missing in a non-interactive or `--yes` run, [`Error::Aborted`]
+/// /[`Error::Prompt`] from prompts.
 pub(crate) fn collect(args: NewArgs) -> Result<(ProjectName, ProjectSpec)> {
     validate_flags(&args)?;
 
-    let mode = if std::io::stdin().is_terminal() && !args.no_input {
+    let mode = if args.yes {
+        // `--yes` never asks, on a terminal or not.
+        Interaction::Defaults
+    } else if std::io::stdin().is_terminal() && !args.no_input {
         Interaction::Interactive
     } else {
         Interaction::NonInteractive
@@ -105,6 +112,7 @@ fn validate_flags(args: &NewArgs) -> Result<()> {
 }
 
 /// The project kind: the flag, the inference from web flags, or a question.
+/// There is no default kind — `--yes` still requires one.
 fn resolve_kind(
     kind: Option<ProjectKind>,
     web: &WebFlags,
@@ -123,20 +131,25 @@ fn resolve_kind(
                 ProjectKind::Game,
             ],
         ),
-        (None, false, Interaction::NonInteractive) => Err(Error::MissingOptions("`--kind`".into())),
+        (None, false, Interaction::Defaults | Interaction::NonInteractive) => {
+            Err(Error::MissingOptions("`--kind`".into()))
+        }
     }
 }
 
-/// The project name is the first question of an interactive run.
+/// The project name is the first question of an interactive run. It has no
+/// default: `--yes` still requires it, like `--kind`.
 fn prompt_name(mode: Interaction) -> Result<ProjectName> {
     match mode {
-        Interaction::NonInteractive => Err(Error::MissingOptions("`NAME`".into())),
         Interaction::Interactive => {
             let name = Text::new("What is the name of your project?")
                 .with_render_config(render_cfg())
                 .with_validator(validate_name_availability)
                 .prompt()?;
             ProjectName::new(name)
+        }
+        Interaction::Defaults | Interaction::NonInteractive => {
+            Err(Error::MissingOptions("`NAME`".into()))
         }
     }
 }
@@ -319,6 +332,16 @@ mod tests {
         let web = WebFlags::default();
         assert!(matches!(
             resolve_kind(None, &web, Interaction::NonInteractive),
+            Err(Error::MissingOptions(_))
+        ));
+    }
+
+    #[test]
+    fn kind_has_no_default_under_yes() {
+        // `--yes` fills option defaults, but there is no default kind.
+        let web = WebFlags::default();
+        assert!(matches!(
+            resolve_kind(None, &web, Interaction::Defaults),
             Err(Error::MissingOptions(_))
         ));
     }

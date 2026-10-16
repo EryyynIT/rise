@@ -27,8 +27,7 @@ WORKDIR /build/frontend
 COPY frontend .
 RUN trunk build --release
 
-# Build the backend (sqlx queries are checked at runtime, no DATABASE_URL
-# is needed here).
+# Build the backend (the database is only needed at runtime).
 FROM rust:1-slim AS backend-builder
 WORKDIR /build
 COPY . .

@@ -528,6 +528,17 @@ mod tests {
     }
 
     #[test]
+    fn safe_join_refuses_escaping_paths() {
+        let target = Path::new("/tmp/rise-test-target");
+        for rel in ["../evil", "sub/../../evil", "/abs/evil"] {
+            assert!(safe_join(target, rel).is_err(), "{rel} must be refused");
+        }
+        // Ordinary relative paths join fine.
+        let ok = safe_join(target, "src/main.rs").expect("safe path");
+        assert_eq!(ok, target.join("src/main.rs"));
+    }
+
+    #[test]
     fn axum_backend_plans_a_single_root_step() {
         let name = project_name("app");
         let spec = backend_spec(Backend::Axum, Deployment::Docker);

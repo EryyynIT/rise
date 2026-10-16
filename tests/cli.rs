@@ -131,6 +131,48 @@ fn new_with_verify_checks_the_generated_build() {
 }
 
 #[test]
+fn a_failed_verify_keeps_the_project_on_disk() {
+    // A broken build is the user's code now — rise reports it but never
+    // deletes the project (unlike a half-written generation).
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let template_dir = tmp.path().join("broken-build-template");
+    std::fs::create_dir_all(template_dir.join("src")).expect("mkdir");
+    std::fs::write(
+        template_dir.join("template.toml"),
+        "name = \"broken-build\"\ndescription = \"a crate that does not compile\"\n",
+    )
+    .expect("write manifest");
+    std::fs::write(
+        template_dir.join("Cargo.toml.j2"),
+        "[package]\nname = \"{{ name }}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .expect("write manifest");
+    std::fs::write(template_dir.join("src/main.rs.j2"), "fn main( {\n").expect("write file");
+
+    rise()
+        .args([
+            "new",
+            "broken-app",
+            "--kind",
+            "cli",
+            "--template",
+            template_dir.to_str().expect("utf8 path"),
+            "--verify",
+            "--no-git",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("it is on disk"));
+
+    assert!(
+        tmp.path().join("broken-app/src/main.rs").exists(),
+        "a failed verify keeps the project"
+    );
+}
+
+#[test]
 fn new_with_diesel_wires_a_connection_pool() {
     let tmp = tempfile::tempdir().expect("tempdir");
 

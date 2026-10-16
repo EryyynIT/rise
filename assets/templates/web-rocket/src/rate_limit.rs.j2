@@ -94,6 +94,13 @@ impl Fairing for RateLimit {
     }
 
     async fn on_request(&self, request: &mut Request<'_>, _: &mut Data<'_>) {
+        // Static assets (`.wasm`, `.js`, `.css`, ...) must not burn
+        // tokens: one page load of the WASM frontend is already several
+        // requests, so a plain browser refresh would hit the limit.
+        let last_segment = request.uri().path().as_str().rsplit('/').next().unwrap_or("");
+        if last_segment.contains('.') {
+            return;
+        }
         // Key on the real peer, not `client_ip()`: rocket's `ip_header`
         // config trusts `X-Real-IP` by default, and a direct client can
         // forge it per request — defeating the limit AND growing the map

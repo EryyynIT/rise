@@ -61,6 +61,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Auth projects refuse to start when `JWT_SECRET` still holds the
+  `.env.example` placeholder `change-me-in-production` — it is public, so
+  tokens it signs are forgeable. The generated `compose.yaml` sets a
+  clearly-local dev secret instead, so `docker compose up` keeps working.
 - **The built-in default database is `sqlite` instead of `sqlx`** —
   `rise new myapp --kind web --yes` (and an Enter-only interactive run)
   now generates an Axum app that answers `curl http://localhost:3000`

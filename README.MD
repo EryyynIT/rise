@@ -99,7 +99,7 @@ on Windows) with any subset of:
 ```toml
 backend = "axum"        # axum | actix | rocket
 frontend = "leptos"     # yew | leptos | askama | tera | minijinja | handlebars
-db = "sqlx"             # sqlx | diesel | sea-orm | sled
+db = "sqlx"             # sqlite | sqlx | diesel | sea-orm | sled
 deployment = "docker"   # docker | self-hosted
 testing = ["api"]
 features = ["cors", "auth"]

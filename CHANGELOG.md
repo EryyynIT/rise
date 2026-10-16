@@ -15,16 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   connection pool, the JWT auth module (sqlite SQL dialect), and the
   leptos server functions. `--testing sqlx` accepts it; the pool test runs
   live against an in-memory database instead of being `#[ignore]`d.
-
-### Changed
-
-- **The built-in default database is `sqlite` instead of `sqlx`** —
-  `rise new myapp --kind web --yes` (and an Enter-only interactive run)
-  now generates an Axum app that answers `curl http://localhost:3000`
-  immediately after `cargo run`, with zero external services. The Postgres
-  stacks are unchanged behind `--db sqlx` / `diesel` / `sea-orm`.
-- The "copy `.env.example`" next step is only printed for server
-  databases; embedded databases (sqlite, sled) need no setup.
 - Config file (`~/.config/rise/config.toml`, or `$RISE_CONFIG`): defaults
   for the web wizard — `backend`, `frontend`, `db`, `deployment`,
   `testing`, `features`. Precedence: CLI flag > config > built-in default.
@@ -49,6 +39,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   since 0.1.0 are finally exercised. Line endings are pinned to LF via
   `.gitattributes` so the embedded templates and snapshots stay
   byte-identical across platforms; the PTY tests remain unix-only.
+
+### Changed
+
+- **The built-in default database is `sqlite` instead of `sqlx`** —
+  `rise new myapp --kind web --yes` (and an Enter-only interactive run)
+  now generates an Axum app that answers `curl http://localhost:3000`
+  immediately after `cargo run`, with zero external services. The Postgres
+  stacks are unchanged behind `--db sqlx` / `diesel` / `sea-orm`.
+- The "copy `.env.example`" next step is only printed when it carries
+  something the app needs: a `DATABASE_URL` for server databases, or
+  `JWT_SECRET` when the `auth` feature is on. An embedded database without
+  auth needs no setup at all.
 
 ## [0.7.0] - 2026-10-16
 

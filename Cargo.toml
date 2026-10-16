@@ -37,10 +37,13 @@ toml = "1.1.8"
 
 [dev-dependencies]
 assert_cmd = "2"
-expectrl = "0.9"
 insta = { version = "1.46", features = ["filters"] }
 predicates = "3"
 tempfile = "3.27.0"
+
+# PTY tests (tests/pty.rs) are unix-gated; keep the dependency off Windows.
+[target.'cfg(unix)'.dev-dependencies]
+expectrl = "0.9"
 
 # The profile that 'dist' will build with
 [profile.dist]

@@ -43,6 +43,8 @@ wasm-bindgen = { version = "0.2", optional = true }
 dotenvy = { version = "0.15", optional = true }
 {%- if backend.database == 'sqlx' %}
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"], optional = true }
+{%- elif backend.database == 'sqlite' %}
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite"], optional = true }
 {%- elif backend.database == 'diesel' %}
 diesel = { version = "2", features = ["postgres", "r2d2"], optional = true }
 {%- elif backend.database == 'sea-orm' %}
@@ -81,7 +83,7 @@ ssr = [
     {%- endif %}
     "dep:leptos_actix",
     "dep:dotenvy",
-    {%- if backend.database == 'sqlx' %}
+    {%- if backend.database == 'sqlx' or backend.database == 'sqlite' %}
     "dep:sqlx",
     {%- elif backend.database == 'diesel' %}
     "dep:diesel",

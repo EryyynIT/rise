@@ -66,7 +66,7 @@ async fn main() {
 {%- if 'graph-ql' in backend.features %}
     let app = app.route("/graphql", get(graphiql).post(graphql));
 {%- endif %}
-{%- if backend.database == 'sqlx' %}
+{%- if backend.database == 'sqlx' or backend.database == 'sqlite' %}
     let db = db::create_pool().await.expect("failed to connect to database");
 {%- elif backend.database == 'sea-orm' %}
     let db = db::connect().await.expect("failed to connect to database");
@@ -313,7 +313,24 @@ mod tests {
     }
 }
 {%- endif %}
-{%- if 'sqlx' in backend.testing and backend.database == 'sqlx' %}
+{%- if 'sqlx' in backend.testing and backend.database == 'sqlite' %}
+
+#[cfg(test)]
+mod db_tests {
+    #[tokio::test]
+    async fn pool_connects() {
+        // SQLite runs in-process: the pool test is live, no server needed.
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect");
+        let row: (i64,) = sqlx::query_as("SELECT 1")
+            .fetch_one(&pool)
+            .await
+            .expect("query");
+        assert_eq!(row.0, 1);
+    }
+}
+{%- elif 'sqlx' in backend.testing and backend.database == 'sqlx' %}
 
 #[cfg(test)]
 mod db_tests {

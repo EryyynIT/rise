@@ -85,6 +85,17 @@ pub async fn database_status() -> Result<String, ServerFnError> {
         .await
         .map_err(|e| ServerFnError::new(format!("database query failed: {e}")))
 }
+{%- elif backend.database == 'sqlite' %}
+#[server]
+pub async fn database_status() -> Result<String, ServerFnError> {
+    let pool = use_context::<sqlx::SqlitePool>()
+        .ok_or_else(|| ServerFnError::new("database pool missing from the request context"))?;
+    // Runtime-checked query: the project compiles without a live database.
+    sqlx::query_scalar::<_, String>("SELECT 'connected'")
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(format!("database query failed: {e}")))
+}
 {%- elif backend.database == 'sea-orm' %}
 #[server]
 pub async fn database_status() -> Result<String, ServerFnError> {

@@ -13,6 +13,8 @@ use rocket::{Request, State, get, http::Status, post, request::{FromRequest, Out
 use std::sync::LazyLock;
 {%- if backend.database == 'sqlx' %}
 type Db = sqlx::PgPool;
+{%- elif backend.database == 'sqlite' %}
+type Db = sqlx::SqlitePool;
 {%- elif backend.database == 'sea-orm' %}
 use sea_orm::{ConnectionTrait, DbBackend, Statement};
 
@@ -78,6 +80,40 @@ async fn create_user(db: &Db, username: &str, password_hash: &str) -> Result<boo
 
 async fn password_hash_of(db: &Db, username: &str) -> Result<Option<String>, sqlx::Error> {
     sqlx::query_scalar("SELECT password_hash FROM users WHERE username = $1")
+        .bind(username)
+        .fetch_optional(db)
+        .await
+}
+{%- elif backend.database == 'sqlite' %}
+
+/// Create the users table when missing. Called once at startup.
+pub async fn migrate(db: &Db) {
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS users (\
+            id INTEGER PRIMARY KEY AUTOINCREMENT, \
+            username TEXT NOT NULL UNIQUE, \
+            password_hash TEXT NOT NULL)",
+    )
+    .execute(db)
+    .await
+    .expect("failed to create the users table");
+}
+
+/// Insert a user; false when the username is taken.
+async fn create_user(db: &Db, username: &str, password_hash: &str) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query(
+        "INSERT INTO users (username, password_hash) VALUES (?, ?) \
+         ON CONFLICT (username) DO NOTHING",
+    )
+    .bind(username)
+    .bind(password_hash)
+    .execute(db)
+    .await?;
+    Ok(result.rows_affected() > 0)
+}
+
+async fn password_hash_of(db: &Db, username: &str) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query_scalar("SELECT password_hash FROM users WHERE username = ?")
         .bind(username)
         .fetch_optional(db)
         .await

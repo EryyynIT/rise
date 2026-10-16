@@ -46,6 +46,8 @@ serde_json = "1"
 {%- endif %}
 {%- if backend.database == 'sqlx' %}
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }
+{%- elif backend.database == 'sqlite' %}
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite"] }
 {%- elif backend.database == 'diesel' %}
 diesel = { version = "2", features = ["postgres", "r2d2"] }
 {%- elif backend.database == 'sea-orm' %}

@@ -196,7 +196,7 @@ fn complete_backend(
         config.database,
         mode,
         "`--db`",
-        Database::SQLx,
+        Database::SQLite,
         |preset| {
             select_with_default(
                 "Select a database",
@@ -250,12 +250,13 @@ fn complete_backend(
 /// `mock` is offered to no stack: the generated code has no trait seam
 /// for a mock to implement, so the option would emit a dead dependency
 /// and nothing else. `sqlx` generates a pool test, which needs a sqlx
-/// pool to exercise — the flag path rejects `--testing sqlx` with another
-/// database in `validate_flags`. Flag-passed values outside this list are
-/// rejected by [`reject_unavailable`].
+/// pool to exercise — both sqlx-backed databases (postgres and sqlite)
+/// have one; the flag path rejects `--testing sqlx` with another
+/// database in `validate_flags`. Flag-passed values outside this list
+/// are rejected by [`reject_unavailable`].
 fn implemented_testing(database: Database) -> Vec<Testing> {
     let mut options = vec![Testing::Api];
-    if database == Database::SQLx {
+    if matches!(database, Database::SQLx | Database::SQLite) {
         options.push(Testing::SQLx);
     }
     options
@@ -378,7 +379,8 @@ mod tests {
     #[test]
     fn yes_defaults_build_the_default_stack() {
         // `--kind web --yes` with no shape flags: backend-only axum, and
-        // the per-option defaults behind it.
+        // the per-option defaults behind it — sqlite, so the project runs
+        // with no external services.
         let spec = complete(
             WebFlags::default(),
             Interaction::Defaults,
@@ -389,7 +391,7 @@ mod tests {
             panic!("backend-only is the default shape");
         };
         assert_eq!(backend.backend, Backend::Axum);
-        assert_eq!(backend.database, Database::SQLx);
+        assert_eq!(backend.database, Database::SQLite);
         assert_eq!(backend.deployment, Deployment::Docker);
         assert!(backend.testing.is_empty());
         assert!(backend.features.is_empty());
@@ -557,10 +559,14 @@ mod tests {
     }
 
     #[test]
-    fn sqlx_testing_is_offered_only_with_the_sqlx_database() {
-        // The sqlx pool test exercises a sqlx pool.
+    fn sqlx_testing_is_offered_only_with_a_sqlx_backed_database() {
+        // The sqlx pool test exercises a sqlx pool: postgres and sqlite.
         assert_eq!(
             implemented_testing(Database::SQLx),
+            vec![Testing::Api, Testing::SQLx]
+        );
+        assert_eq!(
+            implemented_testing(Database::SQLite),
             vec![Testing::Api, Testing::SQLx]
         );
         assert_eq!(implemented_testing(Database::Diesel), vec![Testing::Api]);

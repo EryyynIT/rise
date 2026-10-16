@@ -56,7 +56,7 @@ type AppSchema = Schema<QueryRoot, EmptyMutation, EmptySubscription>;
 async fn main() -> Result<(), rocket::Error> {
     // Loads .env when present (DATABASE_URL & co.); absent is fine.
     let _ = dotenvy::dotenv();
-{%- if backend.database == 'sqlx' %}
+{%- if backend.database == 'sqlx' or backend.database == 'sqlite' %}
     let db = db::create_pool().await.expect("failed to connect to database");
 {%- elif backend.database == 'sea-orm' %}
     let db = db::connect().await.expect("failed to connect to database");
@@ -304,7 +304,30 @@ mod tests {
     }
 }
 {%- endif %}
-{%- if 'sqlx' in backend.testing and backend.database == 'sqlx' %}
+{%- if 'sqlx' in backend.testing and backend.database == 'sqlite' %}
+
+#[cfg(test)]
+mod db_tests {
+    #[test]
+    fn pool_connects() {
+        // SQLite runs in-process: the pool test is live, no server needed.
+        // rocket's own tokio runtime, so the generated project needs no
+        // direct tokio dependency.
+        rocket::tokio::runtime::Runtime::new()
+            .expect("tokio runtime")
+            .block_on(async {
+                let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+                    .await
+                    .expect("connect");
+                let row: (i64,) = sqlx::query_as("SELECT 1")
+                    .fetch_one(&pool)
+                    .await
+                    .expect("query");
+                assert_eq!(row.0, 1);
+            });
+    }
+}
+{%- elif 'sqlx' in backend.testing and backend.database == 'sqlx' %}
 
 #[cfg(test)]
 mod db_tests {

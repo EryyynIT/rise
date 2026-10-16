@@ -62,7 +62,7 @@ async fn main() -> std::io::Result<()> {
     let schema = Schema::build(QueryRoot, EmptyMutation, EmptySubscription).finish();
 {%- endif %}
 
-{%- if backend.database == 'sqlx' %}
+{%- if backend.database == 'sqlx' or backend.database == 'sqlite' %}
     let db = db::create_pool().await.expect("failed to connect to database");
 {%- elif backend.database == 'sea-orm' %}
     let db = db::connect().await.expect("failed to connect to database");
@@ -74,7 +74,7 @@ async fn main() -> std::io::Result<()> {
 {%- if 'auth' in backend.features %}
     // Fail at startup, not on the first request, when JWT_SECRET is unset.
     auth::check_secret();
-{%- if backend.database == 'sqlx' or backend.database == 'sea-orm' %}
+{%- if backend.database == 'sqlx' or backend.database == 'sqlite' or backend.database == 'sea-orm' %}
     // The users table behind /auth/register and /auth/login.
     auth::migrate(&db).await;
 {%- elif backend.database == 'diesel' %}
@@ -229,7 +229,7 @@ mod tests {
     use leptos_actix::{LeptosRoutes, generate_route_list};
     use leptos_meta::MetaTags;
     use {{ crate_ident }}::app::*;
-{%- if backend.database != 'sled' %}
+{%- if backend.database != 'sled' and backend.database != 'sqlite' %}
     use {{ crate_ident }}::db;
 {%- endif %}
 
@@ -244,6 +244,13 @@ mod tests {
             .temporary(true)
             .open()
             .expect("open the test database");
+{%- elif backend.database == 'sqlite' %}
+    #[actix_web::test]
+    async fn server_function_answers() {
+        // SQLite runs in-process: the test database lives in memory.
+        let db = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect");
 {%- else %}
     #[actix_web::test]
     #[ignore = "needs a running Postgres (set DATABASE_URL)"]
@@ -291,7 +298,24 @@ mod tests {
     }
 }
 {%- endif %}
-{%- if 'sqlx' in backend.testing and backend.database == 'sqlx' %}
+{%- if 'sqlx' in backend.testing and backend.database == 'sqlite' %}
+
+#[cfg(all(test, feature = "ssr"))]
+mod db_tests {
+    /// SQLite runs in-process: the pool test is live, no server needed.
+    #[actix_web::test]
+    async fn pool_connects() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect");
+        let row: (i64,) = sqlx::query_as("SELECT 1")
+            .fetch_one(&pool)
+            .await
+            .expect("query");
+        assert_eq!(row.0, 1);
+    }
+}
+{%- elif 'sqlx' in backend.testing and backend.database == 'sqlx' %}
 
 #[cfg(all(test, feature = "ssr"))]
 mod db_tests {

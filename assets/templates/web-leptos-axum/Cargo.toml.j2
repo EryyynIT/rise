@@ -49,6 +49,8 @@ console_error_panic_hook = { version = "0.1", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 {%- if backend.database == 'sqlx' %}
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"], optional = true }
+{%- elif backend.database == 'sqlite' %}
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite"], optional = true }
 {%- elif backend.database == 'diesel' %}
 diesel = { version = "2", features = ["postgres", "r2d2"], optional = true }
 {%- elif backend.database == 'sea-orm' %}
@@ -84,7 +86,7 @@ ssr = [
     "dep:jsonwebtoken",
     "dep:serde",
     {%- endif %}
-    {%- if backend.database == 'sqlx' %}
+    {%- if backend.database == 'sqlx' or backend.database == 'sqlite' %}
     "dep:sqlx",
     {%- elif backend.database == 'diesel' %}
     "dep:diesel",

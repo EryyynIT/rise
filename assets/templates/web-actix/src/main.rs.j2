@@ -208,7 +208,7 @@ async fn ws(
 async fn main() -> std::io::Result<()> {
     // Loads .env when present (DATABASE_URL & co.); absent is fine.
     let _ = dotenvy::dotenv();
-{%- if backend.database == 'sqlx' %}
+{%- if backend.database == 'sqlx' or backend.database == 'sqlite' %}
     let pool = db::create_pool().await.expect("failed to connect to database");
 {%- elif backend.database == 'sea-orm' %}
     let conn = db::connect().await.expect("failed to connect to database");
@@ -224,7 +224,7 @@ async fn main() -> std::io::Result<()> {
     // The users table behind /auth/register and /auth/login.
 {%- if backend.database == 'diesel' %}
     auth::migrate(&pool);
-{%- elif backend.database == 'sqlx' %}
+{%- elif backend.database == 'sqlx' or backend.database == 'sqlite' %}
     auth::migrate(&pool).await;
 {%- else %}
     auth::migrate(&conn).await;
@@ -293,7 +293,7 @@ async fn main() -> std::io::Result<()> {
             .service(graphql)
             .app_data(actix_web::web::Data::new(schema.clone()));
 {%- endif %}
-{%- if backend.database == 'sqlx' %}
+{%- if backend.database == 'sqlx' or backend.database == 'sqlite' %}
         app.app_data(actix_web::web::Data::new(pool.clone()))
 {%- elif backend.database == 'sea-orm' %}
         app.app_data(actix_web::web::Data::new(conn.clone()))
@@ -328,7 +328,24 @@ mod tests {
     }
 }
 {%- endif %}
-{%- if 'sqlx' in backend.testing and backend.database == 'sqlx' %}
+{%- if 'sqlx' in backend.testing and backend.database == 'sqlite' %}
+
+#[cfg(test)]
+mod db_tests {
+    #[actix_web::test]
+    async fn pool_connects() {
+        // SQLite runs in-process: the pool test is live, no server needed.
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect");
+        let row: (i64,) = sqlx::query_as("SELECT 1")
+            .fetch_one(&pool)
+            .await
+            .expect("query");
+        assert_eq!(row.0, 1);
+    }
+}
+{%- elif 'sqlx' in backend.testing and backend.database == 'sqlx' %}
 
 #[cfg(test)]
 mod db_tests {

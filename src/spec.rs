@@ -113,12 +113,19 @@ impl Frontend {
     }
 }
 
-/// Database / ORM layer.
+/// Database / ORM layer. The declaration order is the wizard's option
+/// order: sqlite comes first because it is the zero-setup embedded option
+/// (a local file, no server), so an Enter-only run and `--yes` produce a
+/// project that runs without external services.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumIter, Serialize, Deserialize, ValueEnum,
 )]
 #[serde(rename_all = "kebab-case")]
 pub enum Database {
+    /// Embedded SQLite via sqlx — a local file, no database server.
+    #[serde(rename = "sqlite")]
+    #[value(name = "sqlite")]
+    SQLite,
     #[serde(rename = "sqlx")]
     #[value(name = "sqlx")]
     SQLx,
@@ -127,6 +134,14 @@ pub enum Database {
     #[value(name = "sea-orm")]
     SeaORM,
     Sled,
+}
+
+impl Database {
+    /// Embedded databases store data in a local file/directory and run
+    /// without any server or environment setup.
+    pub fn is_embedded(self) -> bool {
+        matches!(self, Self::SQLite | Self::Sled)
+    }
 }
 
 /// Deployment target. Only `docker` shapes the output (Dockerfile and

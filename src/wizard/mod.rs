@@ -102,14 +102,15 @@ fn validate_flags(args: &NewArgs) -> Result<()> {
         }
     }
 
-    // sqlx-based tests need the sqlx database stack they exercise.
+    // sqlx-based tests need a sqlx-backed database (postgres or sqlite).
     let testing_sqlx = web
         .testing
         .as_ref()
         .is_some_and(|testing| testing.contains(&Testing::SQLx));
-    if testing_sqlx && web.database != Some(Database::SQLx) {
+    let sqlx_backed = matches!(web.database, Some(Database::SQLx | Database::SQLite));
+    if testing_sqlx && !sqlx_backed {
         return Err(Error::ConflictingOptions(
-            "`--testing sqlx` requires `--db sqlx`".into(),
+            "`--testing sqlx` requires a sqlx database (`--db sqlx` or `--db sqlite`)".into(),
         ));
     }
     Ok(())
@@ -323,7 +324,7 @@ mod tests {
     }
 
     #[test]
-    fn sqlx_testing_requires_sqlx_database() {
+    fn sqlx_testing_requires_a_sqlx_backed_database() {
         let args = NewArgs {
             web: WebFlags {
                 backend: Some(Backend::Axum),
@@ -340,17 +341,19 @@ mod tests {
     }
 
     #[test]
-    fn sqlx_testing_with_sqlx_database_is_fine() {
-        let args = NewArgs {
-            web: WebFlags {
-                backend: Some(Backend::Axum),
-                database: Some(Database::SQLx),
-                testing: Some(vec![Testing::SQLx]),
-                ..WebFlags::default()
-            },
-            ..NewArgs::default()
-        };
-        assert!(validate_flags(&args).is_ok());
+    fn sqlx_testing_with_a_sqlx_backed_database_is_fine() {
+        for database in [Database::SQLx, Database::SQLite] {
+            let args = NewArgs {
+                web: WebFlags {
+                    backend: Some(Backend::Axum),
+                    database: Some(database),
+                    testing: Some(vec![Testing::SQLx]),
+                    ..WebFlags::default()
+                },
+                ..NewArgs::default()
+            };
+            assert!(validate_flags(&args).is_ok(), "database {database}");
+        }
     }
 
     #[test]

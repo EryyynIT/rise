@@ -3,7 +3,7 @@
 use colored::{Colorize, CustomColor};
 
 use crate::cli::{Command, NewArgs};
-use crate::spec::{Database, Feature, Frontend, ProjectSpec, WebAppSpec};
+use crate::spec::{Feature, Frontend, ProjectSpec, WebAppSpec};
 
 mod cli;
 mod config;
@@ -68,12 +68,11 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
         ProjectSpec::WebApp(WebAppSpec::Fullstack(fullstack)) => Some(fullstack.backend.database),
         _ => None,
     };
-    if let Some(database) = database {
-        let var = if database == Database::Sled {
-            "DB_PATH"
-        } else {
-            "DATABASE_URL"
-        };
+    if let Some(database) = database
+        && !database.is_embedded()
+    {
+        // Embedded databases (sqlite, sled) run out of the box; a server
+        // database needs its connection URL copied from .env.example.
         // In a WASM workspace dotenvy must find the .env from the
         // workspace root (`cargo run -p <name>-backend` runs there):
         // dotenvy searches the working directory and its PARENTS, so a
@@ -84,7 +83,7 @@ fn run_new(mut args: NewArgs) -> Result<(), Error> {
         } else {
             (".env.example", ".env")
         };
-        out.push_str(&format!("  cp {src} {dst}  # set {var}\n"));
+        out.push_str(&format!("  cp {src} {dst}  # set DATABASE_URL\n"));
     }
     if wasm_frontend {
         out.push_str(

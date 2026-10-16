@@ -62,8 +62,9 @@ fn the_wizard_completes_over_a_pty() {
     let mut p = rise_in(tmp.path());
 
     // Enter-only answers walk the first option of every prompt: the web
-    // kind, a backend-only shape, axum, sqlx, docker, no testing, no
-    // features — the same stack the `--yes` defaults pin in tests/cli.rs.
+    // kind, a backend-only shape, axum, sqlite (the zero-setup embedded
+    // default), docker, no testing, no features — the same stack the
+    // `--yes` defaults pin in tests/cli.rs.
     p.expect("name of your project").expect("name prompt");
     p.send(b"pty-app")
         .and_then(|_| p.send(ENTER))
@@ -94,7 +95,10 @@ fn the_wizard_completes_over_a_pty() {
     let manifest =
         std::fs::read_to_string(tmp.path().join("pty-app/Cargo.toml")).expect("read manifest");
     assert!(manifest.contains("axum"), "Enter picked the first backend");
-    assert!(manifest.contains("sqlx"), "Enter picked the first database");
+    assert!(
+        manifest.contains("\"sqlite\""),
+        "Enter picked the first database"
+    );
 }
 
 #[test]

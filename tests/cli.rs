@@ -445,7 +445,7 @@ fn new_without_auth_has_no_auth_module() {
 }
 
 #[test]
-fn sqlx_testing_without_sqlx_database_is_rejected() {
+fn sqlx_testing_without_a_sqlx_backed_database_is_rejected() {
     rise()
         .args([
             "new",
@@ -461,8 +461,37 @@ fn sqlx_testing_without_sqlx_database_is_rejected() {
         .assert()
         .failure()
         .stderr(predicate::str::contains(
-            "`--testing sqlx` requires `--db sqlx`",
+            "`--testing sqlx` requires a sqlx database",
         ));
+}
+
+#[test]
+fn sqlx_testing_with_the_sqlite_database_is_accepted() {
+    // sqlite is sqlx underneath: the pool test renders (live on :memory:).
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    rise()
+        .args([
+            "new",
+            "sqlite-test-app",
+            "--backend",
+            "axum",
+            "--db",
+            "sqlite",
+            "--testing",
+            "sqlx",
+            "--deployment",
+            "self-hosted",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let main_rs = std::fs::read_to_string(tmp.path().join("sqlite-test-app/src/main.rs"))
+        .expect("read main.rs");
+    assert!(main_rs.contains("sqlite::memory:"));
+    assert!(!main_rs.contains("#[ignore"));
 }
 
 #[test]
@@ -1101,7 +1130,8 @@ fn leptos_fullstack_wires_the_database() {
         .current_dir(tmp.path())
         .assert()
         .success()
-        .stdout(predicate::str::contains("DB_PATH"));
+        // Embedded databases need no setup: no "cp .env.example .env" step.
+        .stdout(predicate::str::contains("cp .env.example").not());
 
     let project = tmp.path().join("leptos-app");
     let env_example =
@@ -1535,7 +1565,10 @@ fn yes_generates_the_default_web_stack() {
     let project = tmp.path().join("default-app");
     let manifest = std::fs::read_to_string(project.join("Cargo.toml")).expect("read manifest");
     assert!(manifest.contains("axum"), "axum is the default backend");
-    assert!(manifest.contains("sqlx"), "sqlx is the default database");
+    assert!(
+        manifest.contains("\"sqlite\""),
+        "sqlite is the default database"
+    );
     assert!(
         !manifest.contains("dev-dependencies"),
         "testing/features default to empty"
@@ -1544,6 +1577,40 @@ fn yes_generates_the_default_web_stack() {
         project.join("Dockerfile").exists(),
         "docker is the default deployment"
     );
+    let env_example =
+        std::fs::read_to_string(project.join(".env.example")).expect("read .env.example");
+    assert!(env_example.contains("sqlite://"), "embedded default URL");
+}
+
+#[test]
+fn new_with_sqlite_runs_without_any_setup() {
+    // The zero-config path: no .env needed, no database server — db.rs
+    // defaults to a local file and creates the data directory itself.
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    rise()
+        .args([
+            "new",
+            "sqlite-app",
+            "--backend",
+            "axum",
+            "--db",
+            "sqlite",
+            "--deployment",
+            "docker",
+            "--no-input",
+        ])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+
+    let project = tmp.path().join("sqlite-app");
+    let db_rs = std::fs::read_to_string(project.join("src/db.rs")).expect("read db.rs");
+    assert!(db_rs.contains("SqlitePool"));
+    assert!(db_rs.contains("sqlite://data/app.db?mode=rwc"));
+    assert!(db_rs.contains("create_dir_all"));
+    let gitignore = std::fs::read_to_string(project.join(".gitignore")).expect("read .gitignore");
+    assert!(gitignore.contains("/data"));
 }
 
 #[test]

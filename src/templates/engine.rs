@@ -1603,6 +1603,19 @@ mod tests {
         )));
     }
 
+    // sqlite: the embedded default — data/app.db via DATABASE_URL, /data in
+    // .gitignore, sqlx with the sqlite feature.
+    #[test]
+    fn snapshot_web_axum_sqlite() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Axum,
+            Database::SQLite,
+            Deployment::SelfHosted,
+            vec![],
+            vec![],
+        )));
+    }
+
     #[test]
     fn snapshot_web_actix_sled() {
         insta::assert_snapshot!(snapshot_output(&backend_spec_full(
@@ -1787,6 +1800,17 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_web_rocket_sqlite() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Rocket,
+            Database::SQLite,
+            Deployment::SelfHosted,
+            vec![],
+            vec![],
+        )));
+    }
+
+    #[test]
     fn snapshot_web_rocket_rate_limiting() {
         insta::assert_snapshot!(snapshot_output(&backend_spec_full(
             Backend::Rocket,
@@ -1872,6 +1896,19 @@ mod tests {
         insta::assert_snapshot!(snapshot_output(&backend_spec_full(
             Backend::Axum,
             Database::Sled,
+            Deployment::Docker,
+            vec![],
+            vec![Feature::Auth],
+        )));
+    }
+
+    // sqlite auth uses the sqlite SQL dialect (? placeholders, INTEGER
+    // PRIMARY KEY AUTOINCREMENT) — the snapshot pins it.
+    #[test]
+    fn snapshot_web_axum_auth_sqlite() {
+        insta::assert_snapshot!(snapshot_output(&backend_spec_full(
+            Backend::Axum,
+            Database::SQLite,
             Deployment::Docker,
             vec![],
             vec![Feature::Auth],
@@ -2095,6 +2132,15 @@ mod tests {
         )));
     }
 
+    #[test]
+    fn snapshot_web_axum_fullstack_leptos_sqlite() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_with_db(
+            Backend::Axum,
+            Frontend::Leptos,
+            Database::SQLite
+        )));
+    }
+
     // sled covers DB_PATH in .env.example and /data in .gitignore.
     #[test]
     fn snapshot_web_actix_fullstack_leptos_sled() {
@@ -2102,6 +2148,19 @@ mod tests {
             Backend::Actix,
             Frontend::Leptos,
             Database::Sled
+        )));
+    }
+
+    // sqlite runs the server-function API test live on an in-memory pool
+    // (like sled, no Postgres) and the sqlx pool test too.
+    #[test]
+    fn snapshot_web_actix_fullstack_leptos_testing_sqlite() {
+        insta::assert_snapshot!(snapshot_output(&fullstack_spec_full(
+            Backend::Actix,
+            Frontend::Leptos,
+            Database::SQLite,
+            Deployment::Docker,
+            vec![Testing::Api, Testing::SQLx],
         )));
     }
 

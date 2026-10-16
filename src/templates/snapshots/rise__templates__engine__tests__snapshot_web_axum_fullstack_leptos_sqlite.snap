@@ -8,6 +8,7 @@ expression: "snapshot_output(&fullstack_spec_with_db(Backend::Axum, Frontend::Le
 .git
 /target
 .env
+/data
 
 === .env.example ===
 DATABASE_URL=sqlite://data/app.db?mode=rwc
@@ -205,6 +206,8 @@ pub async fn create_pool() -> Result<SqlitePool, sqlx::Error> {
     // `mode=rwc` creates the database file, but not its parent directory.
     if let Some(directory) = database_url
         .strip_prefix("sqlite://")
+        // sqlx also accepts the short `sqlite:path` form.
+        .or_else(|| database_url.strip_prefix("sqlite:"))
         .and_then(|rest| rest.split('?').next())
         .and_then(|path| std::path::Path::new(path).parent())
         .filter(|parent| !parent.as_os_str().is_empty())

@@ -3,3 +3,6 @@
 .git
 /target
 .env
+{%- if backend.database == 'sled' or backend.database == 'sqlite' %}
+/data
+{%- endif %}

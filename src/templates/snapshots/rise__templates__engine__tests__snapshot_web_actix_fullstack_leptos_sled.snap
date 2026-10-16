@@ -8,6 +8,7 @@ expression: "snapshot_output(&fullstack_spec_with_db(Backend::Actix, Frontend::L
 .git
 /target
 .env
+/data
 
 === .env.example ===
 DB_PATH=data

@@ -216,3 +216,38 @@ impl Fairing for RateLimit {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_bucket_allows_a_burst_then_refuses() {
+        let mut bucket = Bucket::full();
+        for _ in 0..CAPACITY as usize {
+            assert!(bucket.take(), "a full bucket serves its burst");
+        }
+        assert!(!bucket.take(), "an exhausted bucket refuses");
+    }
+
+    #[test]
+    fn buckets_are_isolated_per_ip() {
+        let mut buckets: HashMap<IpAddr, Bucket> = HashMap::new();
+        let first: IpAddr = "1.2.3.4".parse().expect("valid ip");
+        let second: IpAddr = "5.6.7.8".parse().expect("valid ip");
+        for _ in 0..CAPACITY as usize {
+            buckets.entry(first).or_insert_with(Bucket::full).take();
+        }
+        assert!(!buckets.get_mut(&first).expect("bucket").take());
+        assert!(buckets.entry(second).or_insert_with(Bucket::full).take());
+    }
+
+    #[test]
+    fn an_empty_bucket_refills_over_time() {
+        let mut bucket = Bucket {
+            tokens: 0.0,
+            touched: Instant::now() - Duration::from_secs(4),
+        };
+        assert!(bucket.take(), "four idle seconds refill two tokens");
+    }
+}

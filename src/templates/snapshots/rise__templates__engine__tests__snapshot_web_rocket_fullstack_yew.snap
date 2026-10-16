@@ -176,6 +176,7 @@ services:
   db:
     image: postgres:17
     environment:
+      # Local-development password; override it when deploying for real.
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: sample_app
     healthcheck:
@@ -183,6 +184,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      # initdb on a slow disk must not eat into the retry budget.
+      start_period: 10s
     volumes:
       - pgdata:/var/lib/postgresql/data
 volumes:

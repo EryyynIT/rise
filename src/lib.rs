@@ -6,6 +6,7 @@ use crate::cli::{Command, NewArgs};
 use crate::spec::{Database, Feature, Frontend, ProjectSpec, WebAppSpec};
 
 mod cli;
+mod doctor;
 mod error;
 mod name;
 mod spec;
@@ -27,6 +28,7 @@ pub use error::Error;
 pub fn run(cli: Cli) -> Result<(), Error> {
     match cli.command {
         Some(Command::List) => list_templates(),
+        Some(Command::Doctor) => doctor::run(),
         Some(Command::Completions { shell }) => print_completions(shell),
         Some(Command::New(args)) => run_new(args),
         None => run_new(NewArgs::default()),

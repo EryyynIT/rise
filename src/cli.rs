@@ -25,6 +25,9 @@ pub(crate) enum Command {
     New(NewArgs),
     /// List the available project templates.
     List,
+    /// Check that the prerequisites of the generated stacks (trunk, the
+    /// wasm32 target, cargo-leptos, protoc, probe-rs) are installed.
+    Doctor,
     /// Print a shell completion script to stdout.
     Completions {
         /// The shell to generate completions for.

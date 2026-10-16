@@ -52,13 +52,17 @@ pub(crate) fn collect(args: NewArgs) -> Result<(ProjectName, ProjectSpec)> {
         name, kind, web, ..
     } = args;
 
+    // Wizard defaults from the user's config file; flags still win over
+    // them. A broken file fails the run with the path named.
+    let config = crate::config::load()?.unwrap_or_default();
+
     let name = match name {
         Some(name) => name,
         None => prompt_name(mode)?,
     };
     let kind = resolve_kind(kind, &web, mode)?;
     let spec = match kind {
-        ProjectKind::WebApp => ProjectSpec::WebApp(web::complete(web, mode)?),
+        ProjectKind::WebApp => ProjectSpec::WebApp(web::complete(web, mode, &config)?),
         ProjectKind::CliApp => ProjectSpec::CliApp,
         ProjectKind::Library => ProjectSpec::Library,
         ProjectKind::Embedded => ProjectSpec::Embedded,
@@ -179,11 +183,43 @@ pub(crate) fn select<T: Display>(message: &str, options: Vec<T>) -> Result<T> {
         .prompt()?)
 }
 
-/// Multi-choice prompt with the rise theme.
-pub(crate) fn multi_select<T: Display>(message: &str, options: Vec<T>) -> Result<Vec<T>> {
-    Ok(MultiSelect::new(message, options)
-        .with_render_config(render_cfg())
-        .prompt()?)
+/// Single-choice prompt with a preselected option (the config file's
+/// value): the cursor starts on it, so Enter accepts the preset.
+pub(crate) fn select_with_default<T: Display + PartialEq>(
+    message: &str,
+    options: Vec<T>,
+    default: Option<&T>,
+) -> Result<T> {
+    let start = default.and_then(|value| options.iter().position(|option| option == value));
+    let prompt = Select::new(message, options).with_render_config(render_cfg());
+    let prompt = match start {
+        Some(index) => prompt.with_starting_cursor(index),
+        None => prompt,
+    };
+    Ok(prompt.prompt()?)
+}
+
+/// Multi-choice prompt with pre-ticked options (the config file's
+/// values); values outside the option list are ignored here and rejected
+/// later by the same validation flags go through.
+pub(crate) fn multi_select_with_default<T: Display + PartialEq>(
+    message: &str,
+    options: Vec<T>,
+    defaults: &[T],
+) -> Result<Vec<T>> {
+    let indices: Vec<usize> = options
+        .iter()
+        .enumerate()
+        .filter(|(_, option)| defaults.contains(option))
+        .map(|(index, _)| index)
+        .collect();
+    let prompt = MultiSelect::new(message, options).with_render_config(render_cfg());
+    let prompt = if indices.is_empty() {
+        prompt
+    } else {
+        prompt.with_default(&indices)
+    };
+    Ok(prompt.prompt()?)
 }
 
 #[cfg(test)]

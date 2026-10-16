@@ -61,6 +61,16 @@ pub enum Error {
         source: std::io::Error,
     },
 
+    /// The config file exists but could not be read or parsed. Naming the
+    /// path beats silently ignoring a broken config.
+    #[error("invalid config file `{path}`: {reason}")]
+    Config {
+        /// The file that failed.
+        path: String,
+        /// What went wrong (I/O or TOML parse error).
+        reason: String,
+    },
+
     /// A template manifest (`template.toml`) failed to parse.
     #[error("invalid template manifest: {0}")]
     Manifest(#[from] toml::de::Error),

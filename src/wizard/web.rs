@@ -4,12 +4,13 @@ use strum::IntoEnumIterator;
 use strum_macros::{Display, EnumIter};
 
 use crate::cli::WebFlags;
+use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::spec::{
     Backend, BackendSpec, Database, Deployment, Feature, Frontend, FrontendSpec, FullstackSpec,
     Testing, WebAppSpec,
 };
-use crate::wizard::{Interaction, multi_select, select};
+use crate::wizard::{Interaction, multi_select_with_default, select, select_with_default};
 
 /// Shape of a web app — asked only when neither `--backend` nor
 /// `--frontend` was passed.
@@ -30,11 +31,15 @@ struct BackendDraft {
 
 /// Complete a [`WebAppSpec`], asking only for what the flags left open.
 ///
+/// The user's config file supplies defaults below the flags: interactive
+/// prompts are preselected with them, `--yes` and non-interactive runs
+/// take them as values.
+///
 /// # Errors
 ///
 /// [`Error::MissingOptions`] when a required option is missing in a
 /// non-interactive run, [`Error::Aborted`]/[`Error::Prompt`] from prompts.
-pub(crate) fn complete(flags: WebFlags, mode: Interaction) -> Result<WebAppSpec> {
+pub(crate) fn complete(flags: WebFlags, mode: Interaction, config: &Config) -> Result<WebAppSpec> {
     let WebFlags {
         backend,
         frontend,
@@ -53,7 +58,7 @@ pub(crate) fn complete(flags: WebFlags, mode: Interaction) -> Result<WebAppSpec>
                 testing,
                 features,
             };
-            let backend = complete_backend(backend, draft, mode)?;
+            let backend = complete_backend(backend, draft, mode, config)?;
             Ok(match frontend {
                 None => WebAppSpec::Backend(backend),
                 Some(frontend) => WebAppSpec::Fullstack(FullstackSpec { frontend, backend }),
@@ -67,10 +72,17 @@ pub(crate) fn complete(flags: WebFlags, mode: Interaction) -> Result<WebAppSpec>
             } else {
                 Some(fill(
                     deployment,
+                    config.deployment,
                     mode,
                     "`--deployment`",
                     Deployment::Docker,
-                    || select("Select a deployment option", Deployment::iter().collect()),
+                    |preset| {
+                        select_with_default(
+                            "Select a deployment option",
+                            Deployment::iter().collect(),
+                            preset.as_ref(),
+                        )
+                    },
                 )?)
             };
             Ok(WebAppSpec::Frontend(FrontendSpec {
@@ -80,41 +92,81 @@ pub(crate) fn complete(flags: WebFlags, mode: Interaction) -> Result<WebAppSpec>
         }
         (None, None) => match mode {
             // `--yes` with no shape flags: the default web app is a
-            // backend-only axum service; the flag path applies the
+            // backend-only axum service — or whatever stack the config
+            // file prescribes; the re-entered flag path applies the
             // per-option defaults (sqlx, docker, no testing/features).
             Interaction::Defaults => complete(
                 WebFlags {
-                    backend: Some(Backend::Axum),
-                    ..WebFlags::default()
+                    backend: config.backend.or(Some(Backend::Axum)),
+                    ..config_flags(config)
                 },
                 mode,
+                config,
             ),
+            // A config file that names a backend or frontend is a preset:
+            // it fills the shape, not just the options. Without one the
+            // shape stays required.
+            Interaction::NonInteractive
+                if config.backend.is_some() || config.frontend.is_some() =>
+            {
+                complete(config_flags(config), mode, config)
+            }
             Interaction::NonInteractive => Err(Error::MissingOptions(
                 "`--backend` and/or `--frontend`".into(),
             )),
             // No web flags at all: ask everything.
-            Interaction::Interactive => prompt_full(),
+            Interaction::Interactive => prompt_full(config),
         },
+    }
+}
+
+/// The config file's values in the shape of flags, for the no-shape-flag
+/// paths that re-enter [`complete`]. Empty selections stay `None` so the
+/// per-option defaults still apply below them.
+fn config_flags(config: &Config) -> WebFlags {
+    WebFlags {
+        backend: config.backend,
+        frontend: config.frontend,
+        database: config.database,
+        deployment: config.deployment,
+        testing: (!config.testing.is_empty()).then(|| config.testing.clone()),
+        features: (!config.features.is_empty()).then(|| config.features.clone()),
     }
 }
 
 /// The fully interactive web flow, for runs without any web flags.
 /// Only the shape/backend/frontend questions live here; everything else
 /// re-enters [`complete`] so interactive and flag-driven runs share one
-/// question path.
-fn prompt_full() -> Result<WebAppSpec> {
+/// question path. Config values preselect the answers.
+fn prompt_full(config: &Config) -> Result<WebAppSpec> {
     let (backend, frontend) = match select("Select a webapp kind", WebAppKind::iter().collect())? {
         WebAppKind::Backend => (
-            Some(select("Select a backend", implemented_backends())?),
+            Some(select_with_default(
+                "Select a backend",
+                implemented_backends(),
+                config.backend.as_ref(),
+            )?),
             None,
         ),
         WebAppKind::Frontend => (
             None,
-            Some(select("Select a frontend tech", frontend_options(None))?),
+            Some(select_with_default(
+                "Select a frontend tech",
+                frontend_options(None),
+                config.frontend.as_ref(),
+            )?),
         ),
         WebAppKind::Fullstack => {
-            let backend = select("Select a backend", implemented_backends())?;
-            let frontend = select("Select a frontend tech", frontend_options(Some(backend)))?;
+            let backend = select_with_default(
+                "Select a backend",
+                implemented_backends(),
+                config.backend.as_ref(),
+            )?;
+            let frontend = select_with_default(
+                "Select a frontend tech",
+                frontend_options(Some(backend)),
+                config.frontend.as_ref(),
+            )?;
             (Some(backend), Some(frontend))
         }
     };
@@ -125,35 +177,60 @@ fn prompt_full() -> Result<WebAppSpec> {
             ..WebFlags::default()
         },
         Interaction::Interactive,
+        config,
     )
 }
 
 /// Complete the backend spec, asking only for what the flags left open.
 ///
 /// Flag-passed values outside the implemented list are rejected by name.
+/// The config file's values sit between flags and the built-in defaults.
 fn complete_backend(
     backend: Backend,
     draft: BackendDraft,
     mode: Interaction,
+    config: &Config,
 ) -> Result<BackendSpec> {
-    let database = fill(draft.database, mode, "`--db`", Database::SQLx, || {
-        select("Select a database", Database::iter().collect())
-    })?;
+    let database = fill(
+        draft.database,
+        config.database,
+        mode,
+        "`--db`",
+        Database::SQLx,
+        |preset| {
+            select_with_default(
+                "Select a database",
+                Database::iter().collect(),
+                preset.as_ref(),
+            )
+        },
+    )?;
     let deployment = fill(
         draft.deployment,
+        config.deployment,
         mode,
         "`--deployment`",
         Deployment::Docker,
-        || select("Select a deployment option", Deployment::iter().collect()),
+        |preset| {
+            select_with_default(
+                "Select a deployment option",
+                Deployment::iter().collect(),
+                preset.as_ref(),
+            )
+        },
     )?;
     let implemented_testing = implemented_testing(database);
-    let testing = fill_multi(draft.testing, mode, || {
-        multi_select("Select testing options", implemented_testing.clone())
+    let testing = fill_multi(draft.testing, &config.testing, mode, |preset| {
+        multi_select_with_default(
+            "Select testing options",
+            implemented_testing.clone(),
+            preset,
+        )
     })?;
     reject_unavailable(&testing, &implemented_testing, Error::TestingNotAvailable)?;
     let implemented_features = implemented_features();
-    let features = fill_multi(draft.features, mode, || {
-        multi_select("Select features", implemented_features.clone())
+    let features = fill_multi(draft.features, &config.features, mode, |preset| {
+        multi_select_with_default("Select features", implemented_features.clone(), preset)
     })?;
     reject_unavailable(
         &features,
@@ -227,34 +304,41 @@ fn implemented_features() -> Vec<Feature> {
     ]
 }
 
-/// Take the flag value, the `--yes` default, ask for it, or report it
-/// missing. The default applies only in [`Interaction::Defaults`].
+/// Take the flag value, the config value, the `--yes` default, ask for
+/// it, or report it missing. Precedence: flag > config > built-in
+/// default (the default applies only in [`Interaction::Defaults`]). An
+/// interactive run still asks — the config value preselects the answer.
 fn fill<T: Copy>(
     flag: Option<T>,
+    config: Option<T>,
     mode: Interaction,
     name: &'static str,
     default: T,
-    ask: impl FnOnce() -> Result<T>,
+    ask: impl FnOnce(Option<T>) -> Result<T>,
 ) -> Result<T> {
     match (flag, mode) {
         (Some(value), _) => Ok(value),
-        (None, Interaction::Interactive) => ask(),
-        (None, Interaction::Defaults) => Ok(default),
-        (None, Interaction::NonInteractive) => Err(Error::MissingOptions(name.into())),
+        (None, Interaction::Interactive) => ask(config),
+        (None, Interaction::Defaults) => Ok(config.unwrap_or(default)),
+        (None, Interaction::NonInteractive) => {
+            config.ok_or_else(|| Error::MissingOptions(name.into()))
+        }
     }
 }
 
-/// Multi-value flags are optional: a `--yes` or non-interactive run leaves
-/// them empty.
-fn fill_multi<T>(
+/// Multi-value flags are optional: a `--yes` or non-interactive run
+/// leaves them empty, or takes the config file's selection when one is
+/// configured. Interactive runs pre-tick the config values.
+fn fill_multi<T: Clone>(
     flag: Option<Vec<T>>,
+    config: &[T],
     mode: Interaction,
-    ask: impl FnOnce() -> Result<Vec<T>>,
+    ask: impl FnOnce(&[T]) -> Result<Vec<T>>,
 ) -> Result<Vec<T>> {
     match (flag, mode) {
         (Some(values), _) => Ok(values),
-        (None, Interaction::Interactive) => ask(),
-        (None, Interaction::Defaults | Interaction::NonInteractive) => Ok(Vec::new()),
+        (None, Interaction::Interactive) => ask(config),
+        (None, Interaction::Defaults | Interaction::NonInteractive) => Ok(config.to_vec()),
     }
 }
 
@@ -295,7 +379,12 @@ mod tests {
     fn yes_defaults_build_the_default_stack() {
         // `--kind web --yes` with no shape flags: backend-only axum, and
         // the per-option defaults behind it.
-        let spec = complete(WebFlags::default(), Interaction::Defaults).expect("defaults");
+        let spec = complete(
+            WebFlags::default(),
+            Interaction::Defaults,
+            &Config::default(),
+        )
+        .expect("defaults");
         let WebAppSpec::Backend(backend) = spec else {
             panic!("backend-only is the default shape");
         };
@@ -316,6 +405,7 @@ mod tests {
                 ..WebFlags::default()
             },
             Interaction::Defaults,
+            &Config::default(),
         )
         .expect("defaults");
         let WebAppSpec::Backend(backend) = spec else {
@@ -335,6 +425,7 @@ mod tests {
                 ..WebFlags::default()
             },
             Interaction::Defaults,
+            &Config::default(),
         )
         .expect("defaults");
         let WebAppSpec::Frontend(frontend) = spec else {
@@ -354,6 +445,7 @@ mod tests {
                 ..WebFlags::default()
             },
             Interaction::Defaults,
+            &Config::default(),
         )
         .expect("defaults");
         let WebAppSpec::Frontend(frontend) = spec else {
@@ -395,10 +487,11 @@ mod tests {
     fn fill_prefers_the_flag_over_asking() {
         let value = fill(
             Some(Database::Diesel),
+            None,
             Interaction::Interactive,
             "`--db`",
             Database::SQLx,
-            || panic!("must not ask when the flag is set"),
+            |_| panic!("must not ask when the flag is set"),
         )
         .expect("flag value");
         assert_eq!(value, Database::Diesel);
@@ -408,10 +501,11 @@ mod tests {
     fn fill_takes_the_default_under_yes() {
         let value = fill(
             None,
+            None,
             Interaction::Defaults,
             "`--db`",
             Database::SQLx,
-            || unreachable!(),
+            |_| unreachable!(),
         )
         .expect("default value");
         assert_eq!(value, Database::SQLx);
@@ -421,18 +515,20 @@ mod tests {
     fn fill_reports_missing_options_when_non_interactive() {
         let result = fill::<Database>(
             None,
+            None,
             Interaction::NonInteractive,
             "`--db`",
             Database::SQLx,
-            || unreachable!(),
+            |_| unreachable!(),
         );
         assert!(matches!(result, Err(Error::MissingOptions(_))));
     }
 
     #[test]
     fn fill_multi_defaults_to_empty_when_non_interactive() {
-        let values = fill_multi::<Testing>(None, Interaction::NonInteractive, || unreachable!())
-            .expect("empty by default");
+        let values =
+            fill_multi::<Testing>(None, &[], Interaction::NonInteractive, |_| unreachable!())
+                .expect("empty by default");
         assert!(values.is_empty());
     }
 
@@ -497,6 +593,155 @@ mod tests {
             )
             .expect("the implemented list passes its own validation");
         }
+    }
+
+    #[test]
+    fn config_values_fill_gaps_under_yes() {
+        // A config stack replaces the built-in `--yes` default stack.
+        let config = Config {
+            backend: Some(Backend::Rocket),
+            database: Some(Database::Sled),
+            ..Config::default()
+        };
+        let spec =
+            complete(WebFlags::default(), Interaction::Defaults, &config).expect("config defaults");
+        let WebAppSpec::Backend(backend) = spec else {
+            panic!("backend-only shape");
+        };
+        assert_eq!(backend.backend, Backend::Rocket);
+        assert_eq!(backend.database, Database::Sled);
+        // No config value: the built-in default still applies.
+        assert_eq!(backend.deployment, Deployment::Docker);
+        assert!(backend.features.is_empty());
+    }
+
+    #[test]
+    fn a_config_frontend_makes_yes_fullstack() {
+        let config = Config {
+            frontend: Some(Frontend::Yew),
+            ..Config::default()
+        };
+        let spec =
+            complete(WebFlags::default(), Interaction::Defaults, &config).expect("config defaults");
+        let WebAppSpec::Fullstack(fullstack) = spec else {
+            panic!("a config frontend turns `--yes` fullstack");
+        };
+        assert_eq!(fullstack.frontend, Frontend::Yew);
+        assert_eq!(fullstack.backend.backend, Backend::Axum);
+    }
+
+    #[test]
+    fn flags_beat_config_values() {
+        let config = Config {
+            backend: Some(Backend::Actix),
+            database: Some(Database::Sled),
+            features: vec![Feature::Cors],
+            ..Config::default()
+        };
+        let spec = complete(
+            WebFlags {
+                backend: Some(Backend::Axum),
+                database: Some(Database::Diesel),
+                ..WebFlags::default()
+            },
+            Interaction::Defaults,
+            &config,
+        )
+        .expect("flags win");
+        let WebAppSpec::Backend(backend) = spec else {
+            panic!("backend-only shape");
+        };
+        assert_eq!(backend.backend, Backend::Axum);
+        assert_eq!(backend.database, Database::Diesel);
+        // No flag: the config value applies.
+        assert_eq!(backend.features, vec![Feature::Cors]);
+    }
+
+    #[test]
+    fn a_config_with_a_shape_fills_it_when_non_interactive() {
+        // A config that names a backend is a preset: no shape flags needed.
+        let config = Config {
+            backend: Some(Backend::Actix),
+            database: Some(Database::Sled),
+            deployment: Some(Deployment::SelfHosted),
+            ..Config::default()
+        };
+        let spec = complete(WebFlags::default(), Interaction::NonInteractive, &config)
+            .expect("the config fills the shape");
+        let WebAppSpec::Backend(backend) = spec else {
+            panic!("backend-only shape");
+        };
+        assert_eq!(backend.backend, Backend::Actix);
+    }
+
+    #[test]
+    fn no_config_still_requires_a_shape_when_non_interactive() {
+        let result = complete(
+            WebFlags::default(),
+            Interaction::NonInteractive,
+            &Config::default(),
+        );
+        assert!(matches!(result, Err(Error::MissingOptions(_))));
+    }
+
+    #[test]
+    fn fill_prefers_the_config_over_the_builtin_default() {
+        let value = fill(
+            None,
+            Some(Database::Sled),
+            Interaction::Defaults,
+            "`--db`",
+            Database::SQLx,
+            |_| unreachable!(),
+        )
+        .expect("config value");
+        assert_eq!(value, Database::Sled);
+    }
+
+    #[test]
+    fn an_interactive_fill_asks_with_the_config_value() {
+        // The ask closure receives the config value to preselect the
+        // prompt; the user's answer still wins.
+        let value = fill(
+            None,
+            Some(Database::Sled),
+            Interaction::Interactive,
+            "`--db`",
+            Database::SQLx,
+            |preset| {
+                assert_eq!(preset, Some(Database::Sled));
+                Ok(Database::SeaORM)
+            },
+        )
+        .expect("asked");
+        assert_eq!(value, Database::SeaORM);
+    }
+
+    #[test]
+    fn fill_multi_takes_the_config_selection_when_non_interactive() {
+        let values = fill_multi(
+            None,
+            &[Testing::Api],
+            Interaction::NonInteractive,
+            |_| unreachable!(),
+        )
+        .expect("config selection");
+        assert_eq!(values, vec![Testing::Api]);
+    }
+
+    #[test]
+    fn config_values_outside_the_implemented_list_are_rejected() {
+        // A config file goes through the same availability validation as
+        // flags: `mock` has no template content anywhere.
+        let config = Config {
+            backend: Some(Backend::Axum),
+            database: Some(Database::Sled),
+            deployment: Some(Deployment::Docker),
+            testing: vec![Testing::Mock],
+            ..Config::default()
+        };
+        let result = complete(WebFlags::default(), Interaction::NonInteractive, &config);
+        assert!(matches!(result, Err(Error::TestingNotAvailable(_))));
     }
 
     #[test]

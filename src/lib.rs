@@ -6,6 +6,7 @@ use crate::cli::{Command, NewArgs};
 use crate::spec::{Database, Feature, Frontend, ProjectSpec, WebAppSpec};
 
 mod cli;
+mod config;
 mod doctor;
 mod error;
 mod name;

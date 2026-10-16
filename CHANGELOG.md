@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- New `--features` values: `cors` (permissive CORS — tower-http on Axum,
+  actix-cors on Actix Web, a rocket_cors fairing on Rocket, ssr-gated in the
+  Leptos templates; restrict the origin before deploying) and `auth`
+  (JWT auth — `/auth/register` and `/auth/login` issuing tokens signed with
+  `JWT_SECRET` from `.env.example`, a protected `/api/me` example, users
+  stored in the project's database with argon2-hashed passwords).
 - `rise doctor`: check the prerequisites of the generated stacks (trunk,
   the `wasm32-unknown-unknown` target, cargo-leptos, protoc, probe-rs,
   `thumbv7em-none-eabihf`) and get an install hint for every gap — no more

@@ -7,15 +7,16 @@ use crate::Error;
 
 /// One prerequisite of one or more generated stacks.
 struct Check {
+    /// The report section the check belongs to; the report groups by it,
+    /// so a gap reads as "only matters if you use that stack", not as a
+    /// failure.
+    group: &'static str,
     /// What the report calls it.
     name: &'static str,
     /// How to detect it.
     probe: Probe,
-    /// Which generated stack(s) need it, so a gap reads as "only matters
-    /// if you use that stack", not as a failure.
-    needed_for: &'static str,
-    /// How to install it; mirrors the one-time setup hints the generator
-    /// prints as next steps.
+    /// How to install or update it; mirrors the one-time setup hints the
+    /// generator prints as next steps.
     install_hint: &'static str,
 }
 
@@ -23,57 +24,88 @@ struct Check {
 enum Probe {
     /// Run `<program> --version`; present when the run succeeds.
     Version(&'static str),
+    /// Run `<program> --version` and parse the semver out of it; present
+    /// when the run succeeds, outdated when the version is below `min`.
+    VersionAtLeast {
+        program: &'static str,
+        min: (u32, u32, u32),
+    },
     /// Present when `rustup target list --installed` names the target.
     RustupTarget(&'static str),
 }
 
-/// The prerequisites of everything rise can generate.
+/// The prerequisites of everything rise can generate, in report order:
+/// the report prints a section header whenever the group changes.
 const CHECKS: &[Check] = &[
     Check {
+        group: "core — every generated project",
+        name: "git",
+        probe: Probe::Version("git"),
+        install_hint: "https://git-scm.com/downloads",
+    },
+    Check {
+        group: "core — every generated project",
+        name: "rustc",
+        // Generated projects are edition 2024, which needs rustc 1.85+.
+        probe: Probe::VersionAtLeast {
+            program: "rustc",
+            min: (1, 85, 0),
+        },
+        install_hint: "rustup update stable",
+    },
+    Check {
+        group: "docker deployment",
+        name: "docker",
+        probe: Probe::Version("docker"),
+        install_hint: "https://docs.docker.com/get-docker/",
+    },
+    Check {
+        group: "yew/leptos frontends",
         name: "trunk",
         probe: Probe::Version("trunk"),
-        needed_for: "yew/leptos frontends",
         install_hint: "cargo install trunk",
     },
     Check {
+        group: "yew/leptos frontends",
         name: "wasm32-unknown-unknown",
         probe: Probe::RustupTarget("wasm32-unknown-unknown"),
-        needed_for: "yew/leptos frontends",
         install_hint: "rustup target add wasm32-unknown-unknown",
     },
     Check {
+        group: "leptos fullstack",
         name: "cargo-leptos",
         probe: Probe::Version("cargo-leptos"),
-        needed_for: "leptos fullstack",
         install_hint: "cargo install --locked cargo-leptos",
     },
     Check {
+        group: "the grpc feature",
         name: "protoc",
         probe: Probe::Version("protoc"),
-        needed_for: "the grpc feature",
         install_hint: "https://grpc.io/docs/protoc-installation/",
     },
     Check {
+        group: "embedded firmware",
         name: "probe-rs",
         probe: Probe::Version("probe-rs"),
-        needed_for: "embedded firmware",
         install_hint: "cargo install probe-rs-tools --locked",
     },
     Check {
+        group: "embedded firmware",
         name: "thumbv7em-none-eabihf",
         probe: Probe::RustupTarget("thumbv7em-none-eabihf"),
-        needed_for: "embedded firmware",
         install_hint: "rustup target add thumbv7em-none-eabihf",
     },
 ];
 
 /// What one check found.
 enum Status {
-    /// Installed; carries the first line of `--version` output (empty for
-    /// rustup targets, which have no version line).
+    /// Installed; carries a short version string (empty for rustup
+    /// targets, which have no version line).
     Present(String),
     /// Not installed.
     Missing,
+    /// Installed but older than the check requires.
+    Outdated { found: String, min: (u32, u32, u32) },
     /// Could not be determined, e.g. a rustup target with no rustup.
     Unknown(&'static str),
 }
@@ -103,6 +135,17 @@ fn evaluate(
                 Some(version) => Status::Present(version),
                 None => Status::Missing,
             },
+            Probe::VersionAtLeast { program, min } => match version_of(program) {
+                Some(version) => match parse_semver(&version) {
+                    Some(found) if found >= min => Status::Present(format_version(found)),
+                    Some(found) => Status::Outdated {
+                        found: format_version(found),
+                        min,
+                    },
+                    None => Status::Unknown("could not parse the version"),
+                },
+                None => Status::Missing,
+            },
             Probe::RustupTarget(target) => match installed_targets {
                 Some(installed) if installed.iter().any(|installed| installed == target) => {
                     Status::Present(String::new())
@@ -114,13 +157,36 @@ fn evaluate(
         .collect()
 }
 
-/// Render the report: one line per check, an install hint under every
-/// gap, and a summary.
+/// Extract the first `major.minor.patch` triple from a `--version` line
+/// (`rustc 1.97.1 (abc 2026-01-01)` → `(1, 97, 1)`).
+fn parse_semver(version_line: &str) -> Option<(u32, u32, u32)> {
+    let token = version_line
+        .split_whitespace()
+        .find(|token| token.chars().next().is_some_and(|c| c.is_ascii_digit()))?;
+    let mut parts = token.split('.');
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next()?.parse().ok()?;
+    let patch = parts.next()?.parse().ok()?;
+    Some((major, minor, patch))
+}
+
+/// `1.85.0` out of a triple.
+fn format_version(version: (u32, u32, u32)) -> String {
+    format!("{}.{}.{}", version.0, version.1, version.2)
+}
+
+/// Render the report: a section per stack, one line per check, an install
+/// hint under every gap, and a summary.
 fn report(checks: &[Check], statuses: &[Status]) -> String {
-    let mut out = String::from("rise doctor — prerequisites of the generated stacks\n\n");
+    let mut out = String::from("rise doctor — prerequisites of the generated stacks\n");
     let mut present = 0;
     let mut unknown = 0;
+    let mut group = "";
     for (check, status) in checks.iter().zip(statuses) {
+        if check.group != group {
+            group = check.group;
+            out.push_str(&format!("\n{group}:\n"));
+        }
         let version = match status {
             Status::Present(version) => {
                 present += 1;
@@ -130,6 +196,7 @@ fn report(checks: &[Check], statuses: &[Status]) -> String {
                     format!(" ({version})")
                 }
             }
+            Status::Outdated { found, .. } => format!(" ({found})"),
             _ => String::new(),
         };
         // Pad before coloring: the escape codes must not count toward the
@@ -137,18 +204,23 @@ fn report(checks: &[Check], statuses: &[Status]) -> String {
         let word = match status {
             Status::Present(_) => format!("{:>8}", "ok").green(),
             Status::Missing => format!("{:>8}", "missing").red(),
+            Status::Outdated { .. } => format!("{:>8}", "outdated").red(),
             Status::Unknown(_) => {
                 unknown += 1;
                 format!("{:>8}", "unknown").yellow()
             }
         };
-        out.push_str(&format!(
-            "  {word} {}{version} — {}\n",
-            check.name, check.needed_for
-        ));
+        out.push_str(&format!("  {word} {}{version}\n", check.name));
         match status {
             Status::Missing => {
                 out.push_str(&format!("           install: {}\n", check.install_hint));
+            }
+            Status::Outdated { min, .. } => {
+                out.push_str(&format!(
+                    "           update: {} (need ≥ {})\n",
+                    check.install_hint,
+                    format_version(*min)
+                ));
             }
             Status::Unknown(reason) => {
                 out.push_str(&format!("           cannot check: {reason}\n"));
@@ -211,7 +283,7 @@ mod tests {
     use super::*;
 
     fn every_version(_: &str) -> Option<String> {
-        Some("tool 1.0".to_owned())
+        Some("tool 1.90.0".to_owned())
     }
 
     #[test]
@@ -229,6 +301,26 @@ mod tests {
     }
 
     #[test]
+    fn the_report_groups_by_stack() {
+        let targets = vec![
+            "wasm32-unknown-unknown".to_owned(),
+            "thumbv7em-none-eabihf".to_owned(),
+        ];
+        let statuses = evaluate(CHECKS, &every_version, Some(&targets));
+        let out = report(CHECKS, &statuses);
+        for group in [
+            "core — every generated project:",
+            "docker deployment:",
+            "yew/leptos frontends:",
+            "leptos fullstack:",
+            "the grpc feature:",
+            "embedded firmware:",
+        ] {
+            assert!(out.contains(group), "report has the section {group}");
+        }
+    }
+
+    #[test]
     fn a_missing_tool_gets_its_install_hint() {
         let none_installed: Vec<String> = Vec::new();
         let only_trunk = |program: &str| (program == "trunk").then(|| "trunk 0.21".to_owned());
@@ -237,7 +329,38 @@ mod tests {
         assert!(out.contains("trunk 0.21"));
         assert!(out.contains("install: cargo install --locked cargo-leptos"));
         assert!(out.contains("install: rustup target add wasm32-unknown-unknown"));
-        assert!(out.contains("1 of 6 checks passed"));
+        assert!(out.contains("install: https://docs.docker.com/get-docker/"));
+        assert!(out.contains("1 of 9 checks passed"));
+    }
+
+    #[test]
+    fn an_outdated_rustc_gets_an_update_hint() {
+        let targets = vec![
+            "wasm32-unknown-unknown".to_owned(),
+            "thumbv7em-none-eabihf".to_owned(),
+        ];
+        let old_rustc = |program: &str| {
+            if program == "rustc" {
+                Some("rustc 1.75.0 (82e1608df 2023-12-21)".to_owned())
+            } else {
+                Some("tool 1.90.0".to_owned())
+            }
+        };
+        let statuses = evaluate(CHECKS, &old_rustc, Some(&targets));
+        let out = report(CHECKS, &statuses);
+        assert!(out.contains("outdated rustc (1.75.0)"));
+        assert!(out.contains("update: rustup update stable (need ≥ 1.85.0)"));
+        assert!(out.contains("8 of 9 checks passed"));
+    }
+
+    #[test]
+    fn a_modern_rustc_passes_the_version_check() {
+        assert_eq!(
+            parse_semver("rustc 1.97.1 (abcd 2026-01-01)"),
+            Some((1, 97, 1))
+        );
+        assert_eq!(parse_semver("rustc 1.85.0"), Some((1, 85, 0)));
+        assert_eq!(parse_semver("no version here"), None);
     }
 
     #[test]
@@ -245,6 +368,6 @@ mod tests {
         let statuses = evaluate(CHECKS, &every_version, None);
         let out = report(CHECKS, &statuses);
         assert!(out.contains("cannot check: could not query rustup"));
-        assert!(out.contains("4 of 6 checks passed (2 could not be checked)"));
+        assert!(out.contains("7 of 9 checks passed (2 could not be checked)"));
     }
 }

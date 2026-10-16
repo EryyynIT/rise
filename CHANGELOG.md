@@ -35,11 +35,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (JWT auth — `/auth/register` and `/auth/login` issuing tokens signed with
   `JWT_SECRET` from `.env.example`, a protected `/api/me` example, users
   stored in the project's database with argon2-hashed passwords).
-- `rise doctor`: check the prerequisites of the generated stacks (trunk,
-  the `wasm32-unknown-unknown` target, cargo-leptos, protoc, probe-rs,
-  `thumbv7em-none-eabihf`) and get an install hint for every gap — no more
-  discovering a missing protoc when the generated project fails to build.
-  Always exits 0: a gap only matters for the stack that needs it.
+- `rise doctor`: check the prerequisites of the generated stacks and get
+  an install hint for every gap — no more discovering a missing protoc
+  when the generated project fails to build. The report is grouped by
+  stack (core, docker deployment, frontends, gRPC, embedded); it checks
+  git and rustc ≥ 1.85 (generated projects are edition 2024 — an older
+  compiler is reported with an update hint), docker, and the per-stack
+  toolchain (trunk, wasm32 target, cargo-leptos, protoc, probe-rs,
+  thumbv7em target). Always exits 0: a gap only matters for the stack
+  that needs it.
 - Windows CI: the test workflow now builds and runs the full test suite on
   `windows-latest` too — the Windows binaries the releases have shipped
   since 0.1.0 are finally exercised. Line endings are pinned to LF via

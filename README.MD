@@ -85,9 +85,13 @@ half-written project left behind.
 rise doctor
 ```
 
-probes what the generated stacks need (trunk, the `wasm32-unknown-unknown`
-target, cargo-leptos, protoc, probe-rs and the embedded target) and prints
-an install hint for every gap. A gap only matters for the stack that needs
+probes what the generated stacks need, grouped by stack: the core tools
+every project needs (git, rustc ≥ 1.85 — generated projects are edition
+2024; an outdated compiler is reported with an update hint), docker for
+`--deployment docker`, the frontend toolchain (trunk, the
+`wasm32-unknown-unknown` target, cargo-leptos), protoc for the gRPC
+feature, and probe-rs plus the embedded target for firmware. Every gap
+comes with an install hint. A gap only matters for the stack that needs
 it, so the command always exits 0.
 
 ## Config file

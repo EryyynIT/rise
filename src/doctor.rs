@@ -51,7 +51,7 @@ const CHECKS: &[Check] = &[
             program: "rustc",
             min: (1, 85, 0),
         },
-        install_hint: "rustup update stable",
+        install_hint: "https://rustup.rs/",
     },
     Check {
         group: "docker deployment",
@@ -158,11 +158,14 @@ fn evaluate(
 }
 
 /// Extract the first `major.minor.patch` triple from a `--version` line
-/// (`rustc 1.97.1 (abc 2026-01-01)` → `(1, 97, 1)`).
+/// (`rustc 1.97.1 (abc 2026-01-01)` → `(1, 97, 1)`). Prerelease and build
+/// suffixes (`1.95.0-nightly`, `1.97.1-beta.1`) are dropped: for a
+/// "fresh enough?" check the triple alone is the right pragmatics.
 fn parse_semver(version_line: &str) -> Option<(u32, u32, u32)> {
     let token = version_line
         .split_whitespace()
         .find(|token| token.chars().next().is_some_and(|c| c.is_ascii_digit()))?;
+    let token = token.split(['-', '+']).next()?;
     let mut parts = token.split('.');
     let major = parts.next()?.parse().ok()?;
     let minor = parts.next()?.parse().ok()?;
@@ -317,6 +320,9 @@ mod tests {
             "embedded firmware:",
         ] {
             assert!(out.contains(group), "report has the section {group}");
+            // Groups are contiguous in CHECKS: a section prints exactly
+            // once, not once per occurrence.
+            assert_eq!(out.matches(group).count(), 1, "{group} prints once");
         }
     }
 
@@ -349,7 +355,7 @@ mod tests {
         let statuses = evaluate(CHECKS, &old_rustc, Some(&targets));
         let out = report(CHECKS, &statuses);
         assert!(out.contains("outdated rustc (1.75.0)"));
-        assert!(out.contains("update: rustup update stable (need ≥ 1.85.0)"));
+        assert!(out.contains("update: https://rustup.rs/ (need ≥ 1.85.0)"));
         assert!(out.contains("8 of 9 checks passed"));
     }
 
@@ -360,6 +366,11 @@ mod tests {
             Some((1, 97, 1))
         );
         assert_eq!(parse_semver("rustc 1.85.0"), Some((1, 85, 0)));
+        assert_eq!(
+            parse_semver("rustc 1.95.0-nightly (abcd 2026-01-01)"),
+            Some((1, 95, 0))
+        );
+        assert_eq!(parse_semver("rustc 1.97.1-beta.1"), Some((1, 97, 1)));
         assert_eq!(parse_semver("no version here"), None);
     }
 

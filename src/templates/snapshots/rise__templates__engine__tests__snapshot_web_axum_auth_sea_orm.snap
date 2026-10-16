@@ -56,8 +56,9 @@ services:
       - "3000:3000"
     environment:
       DATABASE_URL: postgres://postgres:postgres@db/sample_app
-      # Change this in production (see .env.example).
-      JWT_SECRET: change-me-in-production
+      # Local development only — the generated app refuses to start on the
+      # .env.example placeholder; rotate this before deploying for real.
+      JWT_SECRET: local-dev-secret-rotate-before-deploy
     depends_on:
       db:
         condition: service_healthy
@@ -119,9 +120,15 @@ struct Claims {
 static JWT_SECRET: LazyLock<String> =
     LazyLock::new(|| std::env::var("JWT_SECRET").expect("set JWT_SECRET (see .env.example)"));
 
-/// Fail at startup, not on the first request, when JWT_SECRET is missing.
+/// Fail at startup, not on the first request, when JWT_SECRET is missing
+/// or still the placeholder from .env.example.
 pub fn check_secret() {
     LazyLock::force(&JWT_SECRET);
+    assert_ne!(
+        JWT_SECRET.as_str(),
+        "change-me-in-production",
+        "set a real JWT_SECRET — the .env.example placeholder is public, so tokens it signs are forgeable"
+    );
 }
 
 /// Create the users table when missing. Called once at startup.

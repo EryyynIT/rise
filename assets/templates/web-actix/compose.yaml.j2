@@ -12,8 +12,9 @@ services:
     environment:
       DATABASE_URL: postgres://postgres:postgres@db/{{ name | replace("-", "_") }}
 {%- if 'auth' in backend.features %}
-      # Change this in production (see .env.example).
-      JWT_SECRET: change-me-in-production
+      # Local development only — the generated app refuses to start on the
+      # .env.example placeholder; rotate this before deploying for real.
+      JWT_SECRET: local-dev-secret-rotate-before-deploy
 {%- endif %}
     depends_on:
       db:

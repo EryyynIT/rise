@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   connection pool, the JWT auth module (sqlite SQL dialect), and the
   leptos server functions. `--testing sqlx` accepts it; the pool test runs
   live against an in-memory database instead of being `#[ignore]`d.
+- `compose.yaml` for Docker projects with a server database
+  (sqlx/diesel/sea-orm): `docker compose up --build` starts the app
+  together with a Postgres service — the container's `DATABASE_URL` points
+  at the service, the `.env` value keeps working for a local `cargo run`.
+  Embedded databases (sqlite, sled) get no compose file: there is no
+  second service to orchestrate.
 - Config file (`~/.config/rise/config.toml`, or `$RISE_CONFIG`): defaults
   for the web wizard — `backend`, `frontend`, `db`, `deployment`,
   `testing`, `features`. Precedence: CLI flag > config > built-in default.

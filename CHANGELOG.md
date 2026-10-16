@@ -94,6 +94,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A template manifest's `exclude_if` key that names no file in the
+  template (a typo) now fails generation with an error naming the key —
+  the rule was previously dead and the file shipped in every project.
+- A failed generation into a pre-existing empty directory now removes
+  everything the run wrote, keeping the directory itself — half-written
+  output was previously left behind there (only directories rise created
+  were cleaned up).
 - The leptos templates' `.dockerignore` now excludes `.env`: both
   Dockerfiles `COPY . .` into the builder stage, so a real
   `DATABASE_URL` leaked into the build context and builder-stage layers.

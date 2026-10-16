@@ -42,7 +42,7 @@ Three ways to drive it:
 ```bash
 rise                                   # interactive wizard — the main mode
 rise new myapp --kind cli              # hybrid: flags prefill, the wizard asks the gaps
-rise new myapp --kind cli --yes        # silent defaults: axum, sqlx, docker, no extras
+rise new myapp --kind web --yes        # silent defaults: axum, sqlx, docker, no extras
 rise new myapp --kind cli --no-input   # fully scripted: missing options are an error, not a question
 ```
 

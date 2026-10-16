@@ -84,6 +84,11 @@ struct Claims {
 static JWT_SECRET: LazyLock<String> =
     LazyLock::new(|| std::env::var("JWT_SECRET").expect("set JWT_SECRET (see .env.example)"));
 
+/// Fail at startup, not on the first request, when JWT_SECRET is missing.
+pub fn check_secret() {
+    LazyLock::force(&JWT_SECRET);
+}
+
 fn users(db: &Db) -> sled::Tree {
     db.open_tree("users").expect("open the users tree")
 }
@@ -108,8 +113,12 @@ pub fn routes(db: Db) -> Router {
         .with_state(db)
 }
 
-/// Register a new user: 201 Created, 409 Conflict when the name is taken.
+/// Register a new user: 201 Created, 409 when the name is taken, 400 on
+/// empty credentials.
 async fn register(State(db): State<Db>, Json(credentials): Json<Credentials>) -> StatusCode {
+    if credentials.username.is_empty() || credentials.password.is_empty() {
+        return StatusCode::BAD_REQUEST;
+    }
     let Ok(password_hash) = hash_password(&credentials.password) else {
         return StatusCode::INTERNAL_SERVER_ERROR;
     };
@@ -199,6 +208,19 @@ fn validate_token(token: &str) -> Option<Claims> {
     .map(|data| data.claims)
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_hashed_password_verifies_and_a_wrong_one_does_not() {
+        let hash = hash_password("correct horse").expect("hashing works");
+        assert!(verify_password(&hash, "correct horse"));
+        assert!(!verify_password(&hash, "a different password"));
+        assert!(!verify_password("not a phc hash", "correct horse"));
+    }
+}
+
 === src/db.rs ===
 //! Embedded key-value storage (sled).
 
@@ -223,6 +245,8 @@ async fn main() {
     let _ = dotenvy::dotenv();
     let app = Router::new().route("/", get(root));
     let db = db::open().expect("failed to open the database");
+    // Fail at startup, not on the first request, when JWT_SECRET is unset.
+    auth::check_secret();
     let app = app.with_state(db.clone());
     // JWT auth: /auth/register, /auth/login and a protected /api/me.
     let app = app.merge(auth::routes(db));

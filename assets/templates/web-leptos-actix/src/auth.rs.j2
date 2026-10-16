@@ -45,6 +45,11 @@ struct Claims {
 
 static JWT_SECRET: LazyLock<String> =
     LazyLock::new(|| std::env::var("JWT_SECRET").expect("set JWT_SECRET (see .env.example)"));
+
+/// Fail at startup, not on the first request, when JWT_SECRET is missing.
+pub fn check_secret() {
+    LazyLock::force(&JWT_SECRET);
+}
 {%- if backend.database == 'sqlx' %}
 
 /// Create the users table when missing. Called once at startup.
@@ -191,9 +196,13 @@ fn password_hash_of(db: &Db, username: &str) -> Result<Option<String>, sled::Err
 }
 {%- endif %}
 
-/// Register a new user: 201 Created, 409 Conflict when the name is taken.
+/// Register a new user: 201 Created, 409 when the name is taken, 400 on
+/// empty credentials.
 #[post("/auth/register")]
 pub async fn register(db: web::Data<Db>, credentials: web::Json<Credentials>) -> HttpResponse {
+    if credentials.username.is_empty() || credentials.password.is_empty() {
+        return HttpResponse::BadRequest().finish();
+    }
     let Ok(password_hash) = hash_password(&credentials.password) else {
         return HttpResponse::InternalServerError().finish();
     };
@@ -316,4 +325,17 @@ fn validate_token(token: &str) -> Option<Claims> {
     )
     .ok()
     .map(|data| data.claims)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_hashed_password_verifies_and_a_wrong_one_does_not() {
+        let hash = hash_password("correct horse").expect("hashing works");
+        assert!(verify_password(&hash, "correct horse"));
+        assert!(!verify_password(&hash, "a different password"));
+        assert!(!verify_password("not a phc hash", "correct horse"));
+    }
 }

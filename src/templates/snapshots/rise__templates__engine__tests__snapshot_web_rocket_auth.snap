@@ -79,6 +79,11 @@ struct Claims {
 static JWT_SECRET: LazyLock<String> =
     LazyLock::new(|| std::env::var("JWT_SECRET").expect("set JWT_SECRET (see .env.example)"));
 
+/// Fail at startup, not on the first request, when JWT_SECRET is missing.
+pub fn check_secret() {
+    LazyLock::force(&JWT_SECRET);
+}
+
 /// Create the users table when missing. Called once at startup.
 pub async fn migrate(db: &Db) {
     sqlx::query(
@@ -112,9 +117,13 @@ async fn password_hash_of(db: &Db, username: &str) -> Result<Option<String>, sql
         .await
 }
 
-/// Register a new user: 201 Created, 409 Conflict when the name is taken.
+/// Register a new user: 201 Created, 409 when the name is taken, 400 on
+/// empty credentials.
 #[post("/auth/register", data = "<credentials>", format = "application/json")]
 pub async fn register(db: &State<Db>, credentials: Json<Credentials>) -> Status {
+    if credentials.username.is_empty() || credentials.password.is_empty() {
+        return Status::BadRequest;
+    }
     let Ok(password_hash) = hash_password(&credentials.password) else {
         return Status::InternalServerError;
     };
@@ -203,6 +212,19 @@ fn validate_token(token: &str) -> Option<Claims> {
     .map(|data| data.claims)
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_hashed_password_verifies_and_a_wrong_one_does_not() {
+        let hash = hash_password("correct horse").expect("hashing works");
+        assert!(verify_password(&hash, "correct horse"));
+        assert!(!verify_password(&hash, "a different password"));
+        assert!(!verify_password("not a phc hash", "correct horse"));
+    }
+}
+
 === src/db.rs ===
 //! Database connection pool (sqlx + Postgres).
 
@@ -231,6 +253,8 @@ async fn main() -> Result<(), rocket::Error> {
     // Loads .env when present (DATABASE_URL & co.); absent is fine.
     let _ = dotenvy::dotenv();
     let db = db::create_pool().await.expect("failed to connect to database");
+    // Fail at startup, not on the first request, when JWT_SECRET is unset.
+    auth::check_secret();
     // The users table behind /auth/register and /auth/login.
     auth::migrate(&db).await;
     // Listen on 0.0.0.0:3000 like every other backend rise generates;

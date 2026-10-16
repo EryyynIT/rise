@@ -65,12 +65,16 @@ async fn main() -> Result<(), rocket::Error> {
 {%- elif backend.database == 'sled' %}
     let db = db::open().expect("failed to open the database");
 {%- endif %}
-{%- if 'auth' in backend.features and backend.database != 'sled' %}
+{%- if 'auth' in backend.features %}
+    // Fail at startup, not on the first request, when JWT_SECRET is unset.
+    auth::check_secret();
+{%- if backend.database != 'sled' %}
     // The users table behind /auth/register and /auth/login.
 {%- if backend.database == 'diesel' %}
     auth::migrate(&db);
 {%- else %}
     auth::migrate(&db).await;
+{%- endif %}
 {%- endif %}
 {%- endif %}
 {%- if 'graph-ql' in backend.features %}

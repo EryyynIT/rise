@@ -143,6 +143,7 @@ cargo leptos watch
 
 The app listens on http://localhost:3000 (SSR + hydration). The database is
 wired into the `database_status` server function.
+The gRPC Greeter service listens on :50051.
 
 ## Test
 
@@ -154,10 +155,11 @@ cargo test --features ssr
 
 ```sh
 docker build -t sample-app .
-docker run -p 3000:3000 sample-app
 ```
 
-or `docker compose up --build` to start the app together with Postgres.
+```sh
+docker compose up --build  # the app together with its Postgres service
+```
 
 === build.rs ===
 fn main() {

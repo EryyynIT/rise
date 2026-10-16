@@ -140,6 +140,9 @@ cargo test --features ssr
 
 ```sh
 docker build -t sample-app .
+```
+
+```sh
 docker run -p 3000:3000 sample-app
 ```
 

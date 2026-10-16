@@ -29,6 +29,15 @@ cargo leptos watch
 
 The app listens on http://localhost:3000 (SSR + hydration). The database is
 wired into the `database_status` server function.
+{%- if 'web-sockets' in backend.features %}
+`/ws` is a WebSocket echo endpoint.
+{%- endif %}
+{%- if 'graph-ql' in backend.features %}
+`/graphql` answers GraphQL queries (POST) and serves GraphiQL (GET).
+{%- endif %}
+{%- if 'grpc' in backend.features %}
+The gRPC Greeter service listens on :50051.
+{%- endif %}
 {%- if 'auth' in backend.features %}
 `POST /auth/register` + `POST /auth/login` issue JWTs; `/api/me` takes one
 as `Authorization: Bearer <token>`.
@@ -45,10 +54,16 @@ cargo test --features ssr
 
 ```sh
 docker build -t {{ name }} .
-docker run -p 3000:3000 {{ name }}
 ```
-{%- if backend.database not in ['sqlite', 'sled'] %}
+{%- if backend.database in ['sqlite', 'sled'] %}
 
-or `docker compose up --build` to start the app together with Postgres.
+```sh
+docker run -p 3000:3000{{ " -p 50051:50051" if 'grpc' in backend.features }}{% if 'auth' in backend.features %} -e JWT_SECRET=<a-long-random-string>{% endif %} {{ name }}
+```
+{%- else %}
+
+```sh
+docker compose up --build  # the app together with its Postgres service
+```
 {%- endif %}
 {%- endif %}

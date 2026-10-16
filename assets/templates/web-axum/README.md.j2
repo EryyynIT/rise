@@ -54,10 +54,16 @@ Database-backed tests are `#[ignore]`d until you pass a live
 
 ```sh
 docker build -t {{ name }} .
-docker run -p 3000:3000{{ " -p 50051:50051" if 'grpc' in backend.features }} {{ name }}
 ```
-{%- if backend.database not in ['sqlite', 'sled'] %}
+{%- if backend.database in ['sqlite', 'sled'] %}
 
-or `docker compose up --build` to start the app together with Postgres.
+```sh
+docker run -p 3000:3000{{ " -p 50051:50051" if 'grpc' in backend.features }}{% if 'auth' in backend.features %} -e JWT_SECRET=<a-long-random-string>{% endif %} {{ name }}
+```
+{%- else %}
+
+```sh
+docker compose up --build  # the app together with its Postgres service
+```
 {%- endif %}
 {%- endif %}

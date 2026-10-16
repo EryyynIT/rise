@@ -81,10 +81,11 @@ Database-backed tests are `#[ignore]`d until you pass a live
 
 ```sh
 docker build -t sample-app .
-docker run -p 3000:3000 sample-app
 ```
 
-or `docker compose up --build` to start the app together with Postgres.
+```sh
+docker compose up --build  # the app together with its Postgres service
+```
 
 === compose.yaml ===
 # The app plus its Postgres database in one command: docker compose up --build.
@@ -163,6 +164,10 @@ static JWT_SECRET: LazyLock<String> =
 /// or still the placeholder from .env.example.
 pub fn check_secret() {
     LazyLock::force(&JWT_SECRET);
+    assert!(
+        !JWT_SECRET.is_empty(),
+        "JWT_SECRET is set but empty — set a real secret (see .env.example)"
+    );
     assert_ne!(
         JWT_SECRET.as_str(),
         "change-me-in-production",

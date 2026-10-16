@@ -73,10 +73,11 @@ Database-backed tests are `#[ignore]`d until you pass a live
 
 ```sh
 docker build -t sample-app .
-docker run -p 3000:3000 sample-app
 ```
 
-or `docker compose up --build` to start the app together with Postgres.
+```sh
+docker compose up --build  # the app together with its Postgres service
+```
 
 === compose.yaml ===
 # The app plus its Postgres database in one command: docker compose up --build.

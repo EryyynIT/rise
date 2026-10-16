@@ -53,6 +53,10 @@ static JWT_SECRET: LazyLock<String> =
 /// or still the placeholder from .env.example.
 pub fn check_secret() {
     LazyLock::force(&JWT_SECRET);
+    assert!(
+        !JWT_SECRET.is_empty(),
+        "JWT_SECRET is set but empty — set a real secret (see .env.example)"
+    );
     assert_ne!(
         JWT_SECRET.as_str(),
         "change-me-in-production",

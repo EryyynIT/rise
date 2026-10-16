@@ -12,3 +12,5 @@ description = "Yew single-page app (WASM, built with trunk)"
 Dockerfile = "backend is not none or deployment != 'docker'"
 ".dockerignore" = "backend is not none or deployment != 'docker'"
 ".gitignore" = "workspace"
+# The workspace root ships the project README; members don't repeat it.
+"README.md" = "workspace"

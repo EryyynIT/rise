@@ -43,3 +43,22 @@ cargo run --release -p {{ name }}-backend
 
 The backend serves the API and the built `frontend/dist` bundle on
 http://localhost:3000.
+{%- if backend.deployment == 'docker' %}
+
+## Docker
+
+```sh
+docker build -t {{ name }} .
+```
+{%- if backend.database in ['sqlite', 'sled'] %}
+
+```sh
+docker run -p 3000:3000{% if 'auth' in backend.features %} -e JWT_SECRET=<a-long-random-string>{% endif %} {{ name }}
+```
+{%- else %}
+
+```sh
+docker compose up --build  # the app together with its Postgres service
+```
+{%- endif %}
+{%- endif %}

@@ -112,7 +112,7 @@ pub(crate) fn complete(flags: WebFlags, mode: Interaction, config: &Config) -> R
                 complete(config_flags(config), mode, config)
             }
             Interaction::NonInteractive => Err(Error::MissingOptions(
-                "`--backend` and/or `--frontend`".into(),
+                "`--backend` and/or `--frontend` (the config file can set them too)".into(),
             )),
             // No web flags at all: ask everything.
             Interaction::Interactive => prompt_full(config),
@@ -320,9 +320,9 @@ fn fill<T: Copy>(
         (Some(value), _) => Ok(value),
         (None, Interaction::Interactive) => ask(config),
         (None, Interaction::Defaults) => Ok(config.unwrap_or(default)),
-        (None, Interaction::NonInteractive) => {
-            config.ok_or_else(|| Error::MissingOptions(name.into()))
-        }
+        (None, Interaction::NonInteractive) => config.ok_or_else(|| {
+            Error::MissingOptions(format!("{name} (the config file can set it too)"))
+        }),
     }
 }
 

@@ -31,8 +31,13 @@ const ENTER: &[u8] = b"\r";
 fn rise_in(dir: &Path) -> OsSession {
     let empty_config = dir.join("empty-config.toml");
     std::fs::write(&empty_config, "").expect("write empty config");
+    rise_with(dir, &empty_config)
+}
+
+/// Spawn bare `rise` inside `dir` with `RISE_CONFIG` set to `config`.
+fn rise_with(dir: &Path, config: &Path) -> OsSession {
     let mut command = Command::new(env!("CARGO_BIN_EXE_rise"));
-    command.current_dir(dir).env("RISE_CONFIG", &empty_config);
+    command.current_dir(dir).env("RISE_CONFIG", config);
     expectrl::Session::spawn(command).expect("spawn rise under a pty")
 }
 
@@ -90,6 +95,56 @@ fn the_wizard_completes_over_a_pty() {
         std::fs::read_to_string(tmp.path().join("pty-app/Cargo.toml")).expect("read manifest");
     assert!(manifest.contains("axum"), "Enter picked the first backend");
     assert!(manifest.contains("sqlx"), "Enter picked the first database");
+}
+
+#[test]
+fn the_config_file_preselects_the_prompts() {
+    // A config preset turns Enter into "accept my defaults": rocket and
+    // sled are NOT the first options, so only a working preselection
+    // (inquire's starting cursor) generates them.
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let config = tmp.path().join("config.toml");
+    std::fs::write(
+        &config,
+        "backend = \"rocket\"\ndb = \"sled\"\ndeployment = \"docker\"\n",
+    )
+    .expect("write config");
+    let mut p = rise_with(tmp.path(), &config);
+
+    p.expect("name of your project").expect("name prompt");
+    p.send(b"preset-app")
+        .and_then(|_| p.send(ENTER))
+        .expect("send the name");
+    for needle in [
+        "type of project",
+        "webapp kind",
+        "Select a backend",
+        "Select a database",
+        "deployment option",
+        "testing options",
+        "Select features",
+    ] {
+        p.expect(needle)
+            .unwrap_or_else(|e| panic!("prompt `{needle}` did not appear: {e}"));
+        p.send(ENTER)
+            .unwrap_or_else(|e| panic!("answer to `{needle}` failed: {e}"));
+    }
+
+    p.expect("created ./preset-app")
+        .expect("the wizard printed the result");
+    let status = exit_status(&mut p);
+    assert!(
+        matches!(status, WaitStatus::Exited(_, 0)),
+        "expected a clean exit, got {status:?}"
+    );
+
+    let manifest =
+        std::fs::read_to_string(tmp.path().join("preset-app/Cargo.toml")).expect("read manifest");
+    assert!(
+        manifest.contains("rocket"),
+        "Enter accepted the config's backend"
+    );
+    assert!(manifest.contains("sled"), "Enter accepted the config's db");
 }
 
 #[test]

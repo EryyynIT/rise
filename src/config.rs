@@ -42,7 +42,9 @@ pub(crate) struct Config {
 /// pointed somewhere, and a typo'd path must not fall back to anything.
 pub(crate) fn load() -> Result<Option<Config>> {
     match std::env::var_os("RISE_CONFIG") {
-        Some(path) => load_from(Path::new(&path), true),
+        // An empty RISE_CONFIG (a script's unset variable) means unset.
+        Some(path) if !path.is_empty() => load_from(Path::new(&path), true),
+        Some(_) => Ok(None),
         None => match default_path() {
             Some(path) => load_from(&path, false),
             // No platform config dir (bare environment): no defaults.
